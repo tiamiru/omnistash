@@ -32,7 +32,7 @@ jobs:
       - name: Run tests
         id: run-tests
         if: steps.has-tests.outputs.found == 'true'
-        run: gotestsum -- -race -coverprofile=coverage.out ./...
+        run: gotestsum -- -race -coverprofile=coverage.out $(go list ./... | grep -v 'test$')
 
       - uses: actions/upload-artifact@v7
         if: steps.run-tests.conclusion != 'skipped'
