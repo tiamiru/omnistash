@@ -44,12 +44,12 @@ func exerciseGetBlob(t *testing.T, newStore BlobStoreSetupFunc) {
 		wantErr     error
 	}{
 		{
-			name:    "error path: malformed digest returns ErrInvalidDigest",
+			name:    "error path: malformed digest returns ErrInvalidDigest", //nolint:goconst
 			digest:  MalformedDigest,
 			wantErr: blobstore.ErrInvalidDigest,
 		},
 		{
-			name:    "error path: unknown digest returns ErrBlobUnknown",
+			name:    "error path: unknown digest returns ErrBlobUnknown", //nolint:goconst
 			digest:  TestDigest,
 			wantErr: blobstore.ErrBlobUnknown,
 		},
@@ -107,14 +107,14 @@ func exerciseGetBlobRange(t *testing.T, newStore BlobStoreSetupFunc) {
 		wantErr     error
 	}{
 		{
-			name:    "error path: malformed digest returns ErrInvalidDigest",
+			name:    "error path: malformed digest returns ErrInvalidDigest", //nolint:goconst
 			digest:  MalformedDigest,
 			first:   0,
 			last:    0,
 			wantErr: blobstore.ErrInvalidDigest,
 		},
 		{
-			name:    "error path: unknown digest returns ErrBlobUnknown",
+			name:    "error path: unknown digest returns ErrBlobUnknown", //nolint:goconst
 			digest:  TestDigest,
 			first:   0,
 			last:    0,
