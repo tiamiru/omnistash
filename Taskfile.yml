@@ -46,7 +46,7 @@ tasks:
     desc: Run unit tests with coverage and generate an HTML report
     cmds:
       - mkdir -p {{.ROOT_DIR}}/.coverage
-      - go test -coverprofile={{.ROOT_DIR}}/.coverage/coverage.out $(go list ./... | grep -v /blobstoretest)
+      - go test -coverprofile={{.ROOT_DIR}}/.coverage/coverage.out $(go list ./... | grep -v 'test$')
       - go tool cover -html={{.ROOT_DIR}}/.coverage/coverage.out -o {{.ROOT_DIR}}/.coverage/coverage.html
       - go tool cover -func={{.ROOT_DIR}}/.coverage/coverage.out | tail -1
       - echo "Coverage report @ {{.ROOT_DIR}}/.coverage/coverage.html"
