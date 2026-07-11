@@ -49,7 +49,7 @@ tasks:
       - go test -coverprofile={{.ROOT_DIR}}/.coverage/coverage.out $(go list ./... | grep -v /blobstoretest)
       - go tool cover -html={{.ROOT_DIR}}/.coverage/coverage.out -o {{.ROOT_DIR}}/.coverage/coverage.html
       - go tool cover -func={{.ROOT_DIR}}/.coverage/coverage.out | tail -1
-      - echo "Coverage report: {{.ROOT_DIR}}/.coverage/coverage.html"
+      - echo "Coverage report @ {{.ROOT_DIR}}/.coverage/coverage.html"
 
   build:all:
     desc: Cross-compile for all platforms to dist/
