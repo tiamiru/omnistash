@@ -44,6 +44,9 @@ linters:
         - errcheck
         - funlen
         - goconst
+    - path: 'blobstoretest/'
+      linters:
+        - goconst
 
   settings:
     mnd:

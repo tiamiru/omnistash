@@ -40,7 +40,7 @@ func exercisePutBlobTable(t *testing.T, newStore BlobStoreSetupFunc) { //nolint:
 		wantBlobAbsent digest.Digest
 	}{
 		{
-			name:    "error path: malformed digest returns ErrInvalidDigest", //nolint:goconst
+			name:    "error path: malformed digest returns ErrInvalidDigest",
 			digest:  MalformedDigest,
 			size:    int64(len(TestContent)),
 			content: TestContent,
@@ -128,12 +128,12 @@ func exerciseStatBlobTable(t *testing.T, newStore BlobStoreSetupFunc) {
 		wantSize int64
 	}{
 		{
-			name:    "error path: malformed digest returns ErrInvalidDigest", //nolint:goconst
+			name:    "error path: malformed digest returns ErrInvalidDigest",
 			digest:  MalformedDigest,
 			wantErr: blobstore.ErrInvalidDigest,
 		},
 		{
-			name:    "error path: unknown digest returns ErrBlobUnknown", //nolint:goconst
+			name:    "error path: unknown digest returns ErrBlobUnknown",
 			digest:  TestDigest,
 			wantErr: blobstore.ErrBlobUnknown,
 		},
