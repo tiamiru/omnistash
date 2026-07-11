@@ -123,5 +123,18 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
-      - name: Dry-run build
-        run: go build -trimpath -o /dev/null ./cmd/omnistash
+      - uses: go-task/setup-task@v2
+        with:
+          version: 3.x
+
+      - name: Build all platforms
+        run: task build:all
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: build-pr-${{ github.event.pull_request.number }}
+          path: |
+            dist/omnistash_*
+            dist/checksums.txt
+          retention-days: 7
+          overwrite: true
