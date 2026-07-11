@@ -1,0 +1,9 @@
+
+dist/
+bin/
+vendor/
+
+coverage.out
+coverage.xml
+coverage.html
+.coverage/
