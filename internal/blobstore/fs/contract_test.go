@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	blobs "github.com/tiamiru/omnistash/internal/blobstore"
+	"github.com/tiamiru/omnistash/internal/blobstore"
 	"github.com/tiamiru/omnistash/internal/blobstore/blobstoretest"
 	"github.com/tiamiru/omnistash/internal/blobstore/fs"
 )
@@ -12,7 +12,7 @@ import (
 func TestFilesystemBlobStore_Contract(t *testing.T) {
 	t.Parallel()
 	baseDir := t.TempDir()
-	newStore := func(t *testing.T, prefix string, partition blobs.PartitionKey) blobs.BlobStore {
+	newStore := func(t *testing.T, prefix string, partition blobstore.PartitionKey) blobstore.BlobStore {
 		t.Helper()
 
 		return fs.NewFilesystemBlobStore(filepath.Join(baseDir, prefix), partition)

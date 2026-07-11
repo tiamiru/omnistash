@@ -12,17 +12,16 @@ import (
 	"github.com/opencontainers/go-digest"
 
 	"github.com/tiamiru/omnistash/internal/blobstore"
-	blobs "github.com/tiamiru/omnistash/internal/blobstore"
 )
 
-var _ blobs.BlobStore = &FilesystemBlobStore{}
+var _ blobstore.BlobStore = &FilesystemBlobStore{}
 
 type FilesystemBlobStore struct {
 	prefix    string
-	partition blobs.PartitionKey
+	partition blobstore.PartitionKey
 }
 
-func NewFilesystemBlobStore(prefix string, partition blobs.PartitionKey) *FilesystemBlobStore {
+func NewFilesystemBlobStore(prefix string, partition blobstore.PartitionKey) *FilesystemBlobStore {
 	return &FilesystemBlobStore{
 		prefix:    prefix,
 		partition: partition,
@@ -30,13 +29,13 @@ func NewFilesystemBlobStore(prefix string, partition blobs.PartitionKey) *Filesy
 }
 
 func (s *FilesystemBlobStore) PutBlob(d digest.Digest, size int64, r io.Reader) (int64, error) {
-	err := blobs.ValidateDigest(d)
+	err := blobstore.ValidateDigest(d)
 	if err != nil {
 		return 0, fmt.Errorf("put blob %s: %w", d, err)
 	}
 
 	if size < 0 {
-		return 0, fmt.Errorf("put blob %s: %w: got %d", d, blobs.ErrSizeInvalid, size)
+		return 0, fmt.Errorf("put blob %s: %w: got %d", d, blobstore.ErrSizeInvalid, size)
 	}
 
 	tmpPath, n, err := s.writeBlobToStaging(d, size, r)
@@ -44,9 +43,7 @@ func (s *FilesystemBlobStore) PutBlob(d digest.Digest, size int64, r io.Reader) 
 		return 0, fmt.Errorf("put blob %s: %w", d, err)
 	}
 
-	defer func() {
-		_ = removeFileIfExists(tmpPath) //nolint:errcheck // will log with logger.Warn once logger is added
-	}()
+	defer removeFileIfExists(tmpPath) //nolint:errcheck
 
 	err = s.linkStagedFile(tmpPath, d)
 	if err != nil {
@@ -57,7 +54,7 @@ func (s *FilesystemBlobStore) PutBlob(d digest.Digest, size int64, r io.Reader) 
 }
 
 func (s *FilesystemBlobStore) StatBlob(d digest.Digest) (int64, error) {
-	err := blobs.ValidateDigest(d)
+	err := blobstore.ValidateDigest(d)
 	if err != nil {
 		return 0, fmt.Errorf("stat blob %s: %w", d, err)
 	}
@@ -66,7 +63,7 @@ func (s *FilesystemBlobStore) StatBlob(d digest.Digest) (int64, error) {
 	fi, err := os.Stat(p)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return 0, fmt.Errorf("%w: digest=%s", blobs.ErrBlobUnknown, d)
+			return 0, fmt.Errorf("%w: digest=%s", blobstore.ErrBlobUnknown, d)
 		}
 
 		return 0, fmt.Errorf("stat blob %s: stat: %w", d, err)
@@ -76,7 +73,7 @@ func (s *FilesystemBlobStore) StatBlob(d digest.Digest) (int64, error) {
 }
 
 func (s *FilesystemBlobStore) writeBlobToStaging(d digest.Digest, size int64, r io.Reader) (string, int64, error) {
-	h, err := blobs.HasherFor(d)
+	h, err := blobstore.HasherFor(d)
 	if err != nil {
 		return "", 0, err
 	}
@@ -87,14 +84,16 @@ func (s *FilesystemBlobStore) writeBlobToStaging(d digest.Digest, size int64, r 
 	}
 
 	if n != size {
-		_ = os.Remove(tmpPath) //nolint:errcheck // will log with logger.Warn once logger is added
-		return "", 0, fmt.Errorf("%w: got %d, want %d", blobs.ErrSizeInvalid, n, size)
+		os.Remove(tmpPath) //nolint:errcheck,gosec
+
+		return "", 0, fmt.Errorf("%w: got %d, want %d", blobstore.ErrSizeInvalid, n, size)
 	}
 
 	actual := digest.NewDigest(d.Algorithm(), h)
 	err = blobstore.MatchDigest(d, actual)
 	if err != nil {
-		_ = os.Remove(tmpPath) //nolint:errcheck // will log with logger.Warn once logger is added
+		os.Remove(tmpPath) //nolint:errcheck,gosec
+
 		return "", 0, err
 	}
 
@@ -109,7 +108,7 @@ func (s *FilesystemBlobStore) writeToStaging(r io.Reader) (_ string, _ int64, er
 	}
 
 	tmpPath := buildStagingPath(s.prefix, string(s.partition), uuid.New().String())
-	f, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o644)
+	f, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o444) //nolint:gosec
 	if err != nil {
 		return "", 0, fmt.Errorf("create tmp: %w", err)
 	}
@@ -120,7 +119,7 @@ func (s *FilesystemBlobStore) writeToStaging(r io.Reader) (_ string, _ int64, er
 			err = fmt.Errorf("close tmp: %w", closeErr)
 		}
 		if err != nil {
-			_ = os.Remove(tmpPath) //nolint:errcheck // will log with logger.Warn once logger is added
+			os.Remove(tmpPath) //nolint:errcheck,gosec
 		}
 	}()
 
@@ -144,7 +143,7 @@ func (s *FilesystemBlobStore) linkStagedFile(tmpPath string, d digest.Digest) er
 	err = os.Link(tmpPath, destPath)
 	if err != nil {
 		if errors.Is(err, iofs.ErrExist) {
-			return fmt.Errorf("%w: digest=%s", blobs.ErrBlobCommitted, d)
+			return fmt.Errorf("%w: digest=%s", blobstore.ErrBlobCommitted, d)
 		}
 
 		return fmt.Errorf("link: %w", err)

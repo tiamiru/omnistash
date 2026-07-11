@@ -23,11 +23,11 @@ var (
 	ErrBlobCommitted  = errors.New("blob already committed")
 )
 
-type BlobStore interface {
+type BlobStore interface { //nolint:iface
 	BlobWriter
 }
 
-type BlobWriter interface {
+type BlobWriter interface { //nolint:iface
 	// PutBlob stores r under digest. Returns ErrBlobCommitted if the digest was already committed concurrently.
 	PutBlob(digest digest.Digest, size int64, r io.Reader) (int64, error)
 

@@ -26,7 +26,7 @@ func ExerciseBlobWriterContract(t *testing.T, newStore BlobStoreSetupFunc) {
 	})
 }
 
-func exercisePutBlobTable(t *testing.T, newStore BlobStoreSetupFunc) {
+func exercisePutBlobTable(t *testing.T, newStore BlobStoreSetupFunc) { //nolint:funlen
 	t.Helper()
 
 	testCases := []struct {
