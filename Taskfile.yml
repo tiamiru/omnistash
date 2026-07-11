@@ -1,0 +1,63 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: '3'
+
+vars:
+  BINARY: '{{.ROOT_DIR}}/bin/omnistash'
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+    silent: true
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run {{.CLI_ARGS | default "./..."}}
+
+  format:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint fmt {{.CLI_ARGS | default "./..."}}
+
+  clean:
+    desc: Remove build artifacts (bin/, dist/, .coverage/)
+    cmds:
+      - rm -rf {{.ROOT_DIR}}/bin {{.ROOT_DIR}}/dist {{.ROOT_DIR}}/.coverage
+
+  build:
+    desc: Build the omnistash registry binary to bin/omnistash
+    cmds:
+      - go build -trimpath -o {{.BINARY}} ./cmd/omnistash
+
+  test:
+    desc: Run unit tests
+    cmds:
+      - go test ./...
+
+  test:race:
+    desc: Run unit tests with race detector
+    cmds:
+      - go test -race ./...
+
+  test:coverage:
+    desc: Run unit tests with coverage and generate an HTML report
+    cmds:
+      - mkdir -p {{.ROOT_DIR}}/.coverage
+      - go test -coverprofile={{.ROOT_DIR}}/.coverage/coverage.out $(go list ./... | grep -v /blobstoretest)
+      - go tool cover -html={{.ROOT_DIR}}/.coverage/coverage.out -o {{.ROOT_DIR}}/.coverage/coverage.html
+      - go tool cover -func={{.ROOT_DIR}}/.coverage/coverage.out | tail -1
+      - echo "Coverage report: {{.ROOT_DIR}}/.coverage/coverage.html"
+
+  build:all:
+    desc: Cross-compile for all platforms to dist/
+    cmds:
+      - mkdir -p dist
+      - GOOS=linux   GOARCH=amd64 go build -trimpath -o dist/omnistash_linux_amd64       ./cmd/omnistash
+      - GOOS=linux   GOARCH=arm64 go build -trimpath -o dist/omnistash_linux_arm64       ./cmd/omnistash
+      - GOOS=darwin  GOARCH=amd64 go build -trimpath -o dist/omnistash_darwin_amd64      ./cmd/omnistash
+      - GOOS=darwin  GOARCH=arm64 go build -trimpath -o dist/omnistash_darwin_arm64      ./cmd/omnistash
+      - GOOS=windows GOARCH=amd64 go build -trimpath -o dist/omnistash_windows_amd64.exe ./cmd/omnistash
+      - cd dist && sha256sum omnistash_* > checksums.txt
