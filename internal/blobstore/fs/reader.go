@@ -19,7 +19,7 @@ func (s *FilesystemBlobStore) GetBlob(d digest.Digest) (io.ReadCloser, int64, er
 	}
 
 	p := buildBlobPath(s.prefix, string(s.partition), d)
-	f, err := os.Open(p) //nolint:gosec
+	f, err := os.Open(p) //nolint:gosec // path is safe as digest validated above
 	if err != nil {
 		if errors.Is(err, iofs.ErrNotExist) {
 			return nil, 0, fmt.Errorf("%w: digest=%s", blobstore.ErrBlobUnknown, d)
@@ -53,7 +53,7 @@ func (s *FilesystemBlobStore) GetBlobRange(d digest.Digest, first, last int64, w
 	}
 
 	p := buildBlobPath(s.prefix, string(s.partition), d)
-	f, err := os.Open(p) //nolint:gosec
+	f, err := os.Open(p) //nolint:gosec // path is safe as digest validated above
 	if err != nil {
 		if errors.Is(err, iofs.ErrNotExist) {
 			return fmt.Errorf("%w: digest=%s", blobstore.ErrBlobUnknown, d)
