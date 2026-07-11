@@ -1,0 +1,26 @@
+package fs
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/opencontainers/go-digest"
+)
+
+func buildBlobPath(prefix, partition string, d digest.Digest) string {
+	return filepath.Join(prefix, partition, d.Algorithm().String(), d.Hex())
+}
+
+func buildStagingPath(prefix, partition, id string) string {
+	return filepath.Join(prefix, partition, ".staging", id)
+}
+
+func removeFileIfExists(path string) error {
+	err := os.Remove(path)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove %s: %w", path, err)
+	}
+
+	return nil
+}
