@@ -128,7 +128,7 @@ func (s *FilesystemBlobStore) writeToStaging(r io.Reader) (_ string, _ int64, er
 	}
 
 	tmpPath := buildStagingPath(s.prefix, string(s.partition), uuid.New().String())
-	f, err := os.OpenFile( //nolint:gosec // safe: path built from constructor args + UUID
+	f, err := os.OpenFile( //nolint:gosec // path built from constructor args + UUID
 		tmpPath,
 		os.O_CREATE|os.O_WRONLY|os.O_EXCL,
 		0o600,
