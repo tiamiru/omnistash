@@ -26,8 +26,8 @@ var (
 )
 
 type BlobStore interface {
-	BlobWriter
 	BlobReader
+	BlobWriter
 }
 
 type BlobReader interface {
