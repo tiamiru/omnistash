@@ -47,6 +47,7 @@ jobs:
         id: has-tests
         run: |
           count=$(find . -name '*_test.go' | wc -l)
+          echo "Found $count test file(s)"
           echo "found=$([[ $count -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
       - name: Run tests
