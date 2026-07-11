@@ -97,7 +97,7 @@ jobs:
     name: Coverage Report
     runs-on: ubuntu-latest
     needs: test
-    if: github.event_name == 'pull_request' && needs.test.outputs.coverage-uploaded == 'true'
+    if: needs.test.outputs.coverage-uploaded == 'true'
     permissions:
       contents: read
       actions: read
@@ -112,7 +112,6 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     needs: [lint, test]
-    if: vars.ENABLE_BUILD_STEP == 'true'
     permissions:
       contents: read
     steps:

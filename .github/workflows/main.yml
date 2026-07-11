@@ -1,0 +1,42 @@
+name: Main
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@latest
+
+      - name: Check for test files
+        id: has-tests
+        run: |
+          count=$(find . -name '*_test.go' | wc -l)
+          echo "Found $count test file(s)"
+          echo "found=$([[ $count -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Run tests
+        id: run-tests
+        if: steps.has-tests.outputs.found == 'true'
+        run: gotestsum -- -race -coverprofile=coverage.out ./...
+
+      - uses: actions/upload-artifact@v7
+        if: steps.run-tests.conclusion != 'skipped'
+        with:
+          name: coverage
+          path: coverage.out
+          retention-days: 90
