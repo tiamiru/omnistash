@@ -7,6 +7,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/tiamiru/omnistash/internal/blobstore"
 )
 
@@ -25,7 +26,7 @@ func ExerciseBlobWriterContract(t *testing.T, newStore BlobStoreSetupFunc) {
 	})
 }
 
-func exercisePutBlobTable(t *testing.T, newStore BlobStoreSetupFunc) { //nolint: funlen
+func exercisePutBlobTable(t *testing.T, newStore BlobStoreSetupFunc) {
 	t.Helper()
 
 	testCases := []struct {
@@ -120,10 +121,10 @@ func exerciseStatBlobTable(t *testing.T, newStore BlobStoreSetupFunc) {
 	t.Helper()
 
 	testCases := []struct {
-		name    string
-		seed    bool
-		digest  digest.Digest
-		wantErr error
+		name     string
+		seed     bool
+		digest   digest.Digest
+		wantErr  error
 		wantSize int64
 	}{
 		{
