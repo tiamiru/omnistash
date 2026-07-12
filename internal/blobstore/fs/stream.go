@@ -41,7 +41,7 @@ func (s *FilesystemBlobStore) InitiateBlobUpload() (string, error) {
 	return uploadID, nil
 }
 
-func (s *FilesystemBlobStore) AppendBlobChunk(uploadID string, offset int64, r io.Reader) (_ int64, err error) {
+func (s *FilesystemBlobStore) AppendBlobChunk(uploadID string, offset int64, r io.Reader) (int64, error) {
 	if offset < 0 {
 		return 0, fmt.Errorf("%w: offset=%d", blobstore.ErrBlobUploadInvalid, offset)
 	}
