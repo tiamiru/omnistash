@@ -14,4 +14,5 @@ func ExerciseBlobStoreContract(t *testing.T, newStore BlobStoreSetupFunc) {
 
 	ExerciseBlobWriterContract(t, newStore)
 	ExerciseBlobReaderContract(t, newStore)
+	ExerciseBlobDeleterContract(t, newStore)
 }

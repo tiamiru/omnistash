@@ -13,15 +13,20 @@ import (
 	"github.com/opencontainers/go-digest"
 
 	"github.com/tiamiru/omnistash/internal/blobstore"
+	"github.com/tiamiru/omnistash/internal/clock"
 	"github.com/tiamiru/omnistash/internal/logtag"
 )
 
 var _ blobstore.BlobStore = &FilesystemBlobStore{}
+var _ blobstore.BlobVacuumer = &FilesystemBlobStore{}
 
 type FilesystemBlobStore struct {
-	prefix    string
-	partition blobstore.PartitionKey
-	logger    *slog.Logger
+	prefix        string
+	partition     blobstore.PartitionKey
+	logger        *slog.Logger
+	clock         clock.Clock
+	vacuumManager *VacuumManager
+	stopVacuum    func() error
 }
 
 func NewFilesystemBlobStore(prefix string, partition blobstore.PartitionKey, opts ...Option) *FilesystemBlobStore {
@@ -29,9 +34,16 @@ func NewFilesystemBlobStore(prefix string, partition blobstore.PartitionKey, opt
 		prefix:    prefix,
 		partition: partition,
 		logger:    slog.New(slog.DiscardHandler),
+		clock:     clock.NewClock(),
 	}
 	for _, opt := range opts {
 		opt(s)
+	}
+	s.vacuumManager = newVacuumManager(s.logger)
+	s.stopVacuum = func() error {
+		s.logger.Warn("StopVacuumProcess: called before vacuum was started")
+
+		return nil
 	}
 
 	return s
@@ -153,6 +165,11 @@ func (s *FilesystemBlobStore) writeToStaging(r io.Reader) (_ string, _ int64, er
 	n, err := io.Copy(f, r)
 	if err != nil {
 		return "", 0, fmt.Errorf("write: %w", err)
+	}
+
+	err = f.Sync()
+	if err != nil {
+		return "", 0, fmt.Errorf("sync: %w", err)
 	}
 
 	return tmpPath, n, nil
