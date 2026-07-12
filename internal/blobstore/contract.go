@@ -72,9 +72,9 @@ type BlobUploader interface {
 	// GetBlobUploadOffset returns the number of bytes received so far for the upload.
 	GetBlobUploadOffset(uploadID string) (int64, error)
 
-	// FinalizeBlobUpload appends the final chunk, verifies digest and size, and commits the blob.
+	// FinalizeBlobUpload verifies digest and size then commits the staged blob.
 	// Returns ErrBlobCommitted if the digest was already committed concurrently.
-	FinalizeBlobUpload(uploadID string, d digest.Digest, size int64, r io.Reader, finalChunkOffset int64) error
+	FinalizeBlobUpload(uploadID string, d digest.Digest, size int64) error
 
 	// CancelBlobUpload discards the upload and removes all temporary resources. A second call is a no-op.
 	CancelBlobUpload(uploadID string) error

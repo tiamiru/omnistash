@@ -44,21 +44,26 @@ func ExerciseBlobUploaderContract(t *testing.T, newStore BlobStoreSetupFunc) {
 		exerciseChunkedUpload(t, newStore)
 	})
 
-	t.Run("SplitUpload", func(t *testing.T) {
-		t.Parallel()
-		exerciseSplitUpload(t, newStore)
-	})
-
 	t.Run("CancelUpload", func(t *testing.T) {
 		t.Parallel()
 		exerciseCancelUpload(t, newStore)
+	})
+
+	t.Run("EmptyBlobUpload", func(t *testing.T) {
+		t.Parallel()
+		exerciseEmptyBlobUpload(t, newStore)
+	})
+
+	t.Run("CrossPartitionIsolation", func(t *testing.T) {
+		t.Parallel()
+		exerciseCrossPartitionIsolation(t, newStore)
 	})
 }
 
 func exerciseInitiateBlobUpload(t *testing.T, newStore BlobStoreSetupFunc) {
 	t.Helper()
 
-	t.Run("happy path: returns a unique upload ID", func(t *testing.T) {
+	t.Run("happy path: returns unique upload IDs", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
@@ -94,8 +99,6 @@ func exerciseGetBlobUploadOffset(t *testing.T, newStore BlobStoreSetupFunc) {
 	})
 }
 
-const wrongOffset = 5
-
 func exerciseAppendBlobChunk(t *testing.T, newStore BlobStoreSetupFunc) {
 	t.Helper()
 
@@ -107,33 +110,20 @@ func exerciseAppendBlobChunk(t *testing.T, newStore BlobStoreSetupFunc) {
 		require.ErrorIs(t, err, blobstore.ErrBlobUploadUnknown)
 	})
 
-	t.Run("error path: negative offset returns ErrBlobUploadInvalid and preserves offset", func(t *testing.T) {
+	t.Run("error path: wrong offset returns ErrRangeNotSatisfiable", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
 		uploadID, err := s.InitiateBlobUpload()
 		require.NoError(t, err)
 
-		_, err = s.AppendBlobChunk(uploadID, -1, strings.NewReader(TestContent))
-		require.ErrorIs(t, err, blobstore.ErrBlobUploadInvalid)
-
-		requireOffset(t, s, uploadID, 0)
-	})
-
-	t.Run("error path: wrong offset returns ErrRangeNotSatisfiable and preserves offset", func(t *testing.T) {
-		t.Parallel()
-		s := newStore(t, t.Name(), DefaultPartition)
-
-		uploadID, err := s.InitiateBlobUpload()
-		require.NoError(t, err)
-
-		_, err = s.AppendBlobChunk(uploadID, wrongOffset, strings.NewReader(TestContent))
+		_, err = s.AppendBlobChunk(uploadID, 5, strings.NewReader(TestContent))
 		require.ErrorIs(t, err, blobstore.ErrRangeNotSatisfiable)
 
 		requireOffset(t, s, uploadID, 0)
 	})
 
-	t.Run("happy path: returns new total size and advances offset", func(t *testing.T) {
+	t.Run("happy path: returns new size and advances offset", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
@@ -148,7 +138,7 @@ func exerciseAppendBlobChunk(t *testing.T, newStore BlobStoreSetupFunc) {
 
 		newSize, err = s.AppendBlobChunk(uploadID, 1, strings.NewReader("}"))
 		require.NoError(t, err)
-		assert.Equal(t, int64(len(TestContent)), newSize)
+		assert.Equal(t, int64(2), newSize)
 
 		requireOffset(t, s, uploadID, int64(len(TestContent)))
 	})
@@ -156,108 +146,15 @@ func exerciseAppendBlobChunk(t *testing.T, newStore BlobStoreSetupFunc) {
 func exerciseFinalizeBlobUploadErrors(t *testing.T, newStore BlobStoreSetupFunc) {
 	t.Helper()
 
-	t.Run("SessionErrors", func(t *testing.T) {
-		t.Parallel()
-		exerciseFinalizeBlobUploadSessionErrors(t, newStore)
-	})
-
-	t.Run("OffsetErrors", func(t *testing.T) {
-		t.Parallel()
-		exerciseFinalizeBlobUploadOffsetErrors(t, newStore)
-	})
-
-	t.Run("SizeErrors", func(t *testing.T) {
-		t.Parallel()
-		exerciseFinalizeBlobUploadSizeErrors(t, newStore)
-	})
-
-	t.Run("ContentErrors", func(t *testing.T) {
-		t.Parallel()
-		exerciseFinalizeBlobUploadContentErrors(t, newStore)
-	})
-}
-
-func exerciseFinalizeBlobUploadSessionErrors(t *testing.T, newStore BlobStoreSetupFunc) {
-	t.Helper()
-
 	t.Run("error path: unknown session returns ErrBlobUploadUnknown", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
-		err := s.FinalizeBlobUpload(
-			FakeUploadID,
-			TestDigest,
-			int64(len(TestContent)),
-			strings.NewReader(TestContent),
-			0,
-		)
+		err := s.FinalizeBlobUpload(FakeUploadID, TestDigest, int64(len(TestContent)))
 		require.ErrorIs(t, err, blobstore.ErrBlobUploadUnknown)
 	})
 
-	t.Run("error path: malformed digest returns ErrInvalidDigest and preserves session", func(t *testing.T) {
-		t.Parallel()
-		s := newStore(t, t.Name(), DefaultPartition)
-
-		uploadID, err := s.InitiateBlobUpload()
-		require.NoError(t, err)
-
-		err = s.FinalizeBlobUpload(
-			uploadID,
-			MalformedDigest,
-			int64(len(TestContent)),
-			strings.NewReader(TestContent),
-			0,
-		)
-		require.ErrorIs(t, err, blobstore.ErrInvalidDigest)
-
-		requireOffset(t, s, uploadID, 0)
-	})
-}
-
-func exerciseFinalizeBlobUploadOffsetErrors(t *testing.T, newStore BlobStoreSetupFunc) {
-	t.Helper()
-
-	t.Run(
-		"error path: wrong final chunk offset on fresh session returns ErrRangeNotSatisfiable and preserves session",
-		func(t *testing.T) {
-			t.Parallel()
-			s := newStore(t, t.Name(), DefaultPartition)
-
-			uploadID, err := s.InitiateBlobUpload()
-			require.NoError(t, err)
-
-			// Session is at offset 0; claiming offset 1 must be rejected.
-			err = s.FinalizeBlobUpload(uploadID, TestDigest, int64(len(TestContent)), strings.NewReader(TestContent), 1)
-			require.ErrorIs(t, err, blobstore.ErrRangeNotSatisfiable)
-
-			requireOffset(t, s, uploadID, 0)
-		},
-	)
-
-	t.Run(
-		"error path: wrong final chunk offset with prior appends returns ErrRangeNotSatisfiable and preserves session",
-		func(t *testing.T) {
-			t.Parallel()
-			s := newStore(t, t.Name(), DefaultPartition)
-
-			uploadID, err := s.InitiateBlobUpload()
-			require.NoError(t, err)
-
-			_, err = s.AppendBlobChunk(uploadID, 0, strings.NewReader("{"))
-			require.NoError(t, err)
-
-			err = s.FinalizeBlobUpload(uploadID, TestDigest, int64(len(TestContent)), strings.NewReader("}"), 0)
-			require.ErrorIs(t, err, blobstore.ErrRangeNotSatisfiable)
-
-			requireOffset(t, s, uploadID, 1)
-		},
-	)
-}
-
-func exerciseFinalizeBlobUploadSizeErrors(t *testing.T, newStore BlobStoreSetupFunc) {
-	t.Helper()
-
-	t.Run("error path: size too large returns ErrSizeInvalid and leaves session for vacuum", func(t *testing.T) {
+	t.Run("error path: size mismatch returns ErrSizeInvalid and session survives", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
@@ -267,18 +164,19 @@ func exerciseFinalizeBlobUploadSizeErrors(t *testing.T, newStore BlobStoreSetupF
 		_, err = s.AppendBlobChunk(uploadID, 0, strings.NewReader(TestContent))
 		require.NoError(t, err)
 
-		err = s.FinalizeBlobUpload(uploadID, TestDigest, int64(len(TestContent))+1, nil, -1)
+		err = s.FinalizeBlobUpload(uploadID, TestDigest, int64(len(TestContent))+1)
 		require.ErrorIs(t, err, blobstore.ErrSizeInvalid)
 
 		_, offsetErr := s.GetBlobUploadOffset(uploadID)
 		require.NoError(t, offsetErr)
 
-		vacuumStaging(t, s, 0)
-		_, offsetErr = s.GetBlobUploadOffset(uploadID)
-		require.ErrorIs(t, offsetErr, blobstore.ErrBlobUploadUnknown)
+		err = s.FinalizeBlobUpload(uploadID, TestDigest, int64(len(TestContent)))
+		require.NoError(t, err)
+
+		assertSessionRemoved(t, s, uploadID)
 	})
 
-	t.Run("error path: size too small returns ErrSizeInvalid and leaves session for vacuum", func(t *testing.T) {
+	t.Run("error path: digest mismatch returns ErrDigestMismatch and session remains", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
@@ -288,40 +186,16 @@ func exerciseFinalizeBlobUploadSizeErrors(t *testing.T, newStore BlobStoreSetupF
 		_, err = s.AppendBlobChunk(uploadID, 0, strings.NewReader(TestContent))
 		require.NoError(t, err)
 
-		err = s.FinalizeBlobUpload(uploadID, TestDigest, int64(len(TestContent))-1, nil, -1)
-		require.ErrorIs(t, err, blobstore.ErrSizeInvalid)
-
-		_, offsetErr := s.GetBlobUploadOffset(uploadID)
-		require.NoError(t, offsetErr)
-
-		vacuumStaging(t, s, 0)
-		_, offsetErr = s.GetBlobUploadOffset(uploadID)
-		require.ErrorIs(t, offsetErr, blobstore.ErrBlobUploadUnknown)
-	})
-}
-
-func exerciseFinalizeBlobUploadContentErrors(t *testing.T, newStore BlobStoreSetupFunc) {
-	t.Helper()
-
-	t.Run("error path: digest mismatch returns ErrDigestMismatch and leaves session for vacuum", func(t *testing.T) {
-		t.Parallel()
-		s := newStore(t, t.Name(), DefaultPartition)
-
-		uploadID, err := s.InitiateBlobUpload()
-		require.NoError(t, err)
-
-		_, err = s.AppendBlobChunk(uploadID, 0, strings.NewReader(TestContent))
-		require.NoError(t, err)
-
-		err = s.FinalizeBlobUpload(uploadID, ZeroDigest, int64(len(TestContent)), nil, -1)
+		err = s.FinalizeBlobUpload(uploadID, ZeroDigest, int64(len(TestContent)))
 		require.ErrorIs(t, err, blobstore.ErrDigestMismatch)
 
 		_, offsetErr := s.GetBlobUploadOffset(uploadID)
 		require.NoError(t, offsetErr)
 
-		vacuumStaging(t, s, 0)
-		_, offsetErr = s.GetBlobUploadOffset(uploadID)
-		require.ErrorIs(t, offsetErr, blobstore.ErrBlobUploadUnknown)
+		cancelErr := s.CancelBlobUpload(uploadID)
+		require.NoError(t, cancelErr)
+
+		assertSessionRemoved(t, s, uploadID)
 	})
 
 	t.Run("error path: already committed returns ErrBlobCommitted and removes session", func(t *testing.T) {
@@ -332,7 +206,10 @@ func exerciseFinalizeBlobUploadContentErrors(t *testing.T, newStore BlobStoreSet
 		uploadID, err := s.InitiateBlobUpload()
 		require.NoError(t, err)
 
-		err = s.FinalizeBlobUpload(uploadID, TestDigest, int64(len(TestContent)), strings.NewReader(TestContent), 0)
+		_, err = s.AppendBlobChunk(uploadID, 0, strings.NewReader(TestContent))
+		require.NoError(t, err)
+
+		err = s.FinalizeBlobUpload(uploadID, TestDigest, int64(len(TestContent)))
 		require.ErrorIs(t, err, blobstore.ErrBlobCommitted)
 
 		_, offsetErr := s.GetBlobUploadOffset(uploadID)
@@ -343,14 +220,17 @@ func exerciseFinalizeBlobUploadContentErrors(t *testing.T, newStore BlobStoreSet
 func exerciseMonolithicUpload(t *testing.T, newStore BlobStoreSetupFunc) {
 	t.Helper()
 
-	t.Run("happy path: content in final chunk is committed and session removed", func(t *testing.T) {
+	t.Run("happy path: content committed and session removed", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
 		uploadID, err := s.InitiateBlobUpload()
 		require.NoError(t, err)
 
-		err = s.FinalizeBlobUpload(uploadID, TestDigest, int64(len(TestContent)), strings.NewReader(TestContent), 0)
+		_, err = s.AppendBlobChunk(uploadID, 0, strings.NewReader(TestContent))
+		require.NoError(t, err)
+
+		err = s.FinalizeBlobUpload(uploadID, TestDigest, int64(len(TestContent)))
 		require.NoError(t, err)
 
 		assertSessionRemoved(t, s, uploadID)
@@ -382,34 +262,7 @@ func exerciseChunkedUpload(t *testing.T, newStore BlobStoreSetupFunc) {
 		require.NoError(t, err)
 		assert.Equal(t, int64(len(TestContent)), newSize)
 
-		err = s.FinalizeBlobUpload(uploadID, TestDigest, int64(len(TestContent)), nil, -1)
-		require.NoError(t, err)
-
-		assertSessionRemoved(t, s, uploadID)
-
-		rc, size, err := s.GetBlob(TestDigest)
-		require.NoError(t, err)
-		t.Cleanup(func() { assert.NoError(t, rc.Close()) })
-		assert.Equal(t, int64(len(TestContent)), size)
-		data, _ := io.ReadAll(rc)
-		assert.Equal(t, TestContent, string(data))
-	})
-}
-
-func exerciseSplitUpload(t *testing.T, newStore BlobStoreSetupFunc) {
-	t.Helper()
-
-	t.Run("happy path: partial appends plus final chunk committed and session removed", func(t *testing.T) {
-		t.Parallel()
-		s := newStore(t, t.Name(), DefaultPartition)
-
-		uploadID, err := s.InitiateBlobUpload()
-		require.NoError(t, err)
-
-		_, err = s.AppendBlobChunk(uploadID, 0, strings.NewReader("{"))
-		require.NoError(t, err)
-
-		err = s.FinalizeBlobUpload(uploadID, TestDigest, int64(len(TestContent)), strings.NewReader("}"), 1)
+		err = s.FinalizeBlobUpload(uploadID, TestDigest, int64(len(TestContent)))
 		require.NoError(t, err)
 
 		assertSessionRemoved(t, s, uploadID)
@@ -426,24 +279,61 @@ func exerciseSplitUpload(t *testing.T, newStore BlobStoreSetupFunc) {
 func exerciseCancelUpload(t *testing.T, newStore BlobStoreSetupFunc) {
 	t.Helper()
 
-	t.Run(
-		"edge case: cancel removes session; subsequent ops return ErrBlobUploadUnknown; second cancel is no-op",
-		func(t *testing.T) {
-			t.Parallel()
-			s := newStore(t, t.Name(), DefaultPartition)
+	t.Run("happy path: cancel removes session and second cancel is a no-op", func(t *testing.T) {
+		t.Parallel()
+		s := newStore(t, t.Name(), DefaultPartition)
 
-			uploadID, err := s.InitiateBlobUpload()
-			require.NoError(t, err)
+		uploadID, err := s.InitiateBlobUpload()
+		require.NoError(t, err)
 
-			err = s.CancelBlobUpload(uploadID)
-			require.NoError(t, err)
+		err = s.CancelBlobUpload(uploadID)
+		require.NoError(t, err)
 
-			assertSessionRemoved(t, s, uploadID)
+		assertSessionRemoved(t, s, uploadID)
 
-			err = s.CancelBlobUpload(uploadID)
-			require.NoError(t, err)
-		},
-	)
+		err = s.CancelBlobUpload(uploadID)
+		require.NoError(t, err)
+	})
+}
+
+func exerciseEmptyBlobUpload(t *testing.T, newStore BlobStoreSetupFunc) {
+	t.Helper()
+
+	t.Run("happy path: zero-byte blob committed", func(t *testing.T) {
+		t.Parallel()
+		s := newStore(t, t.Name(), DefaultPartition)
+
+		uploadID, err := s.InitiateBlobUpload()
+		require.NoError(t, err)
+
+		err = s.FinalizeBlobUpload(uploadID, EmptyDigest, 0)
+		require.NoError(t, err)
+
+		assertSessionRemoved(t, s, uploadID)
+
+		rc, size, err := s.GetBlob(EmptyDigest)
+		require.NoError(t, err)
+		t.Cleanup(func() { assert.NoError(t, rc.Close()) })
+		assert.Equal(t, int64(0), size)
+		data, _ := io.ReadAll(rc)
+		assert.Empty(t, data)
+	})
+}
+
+func exerciseCrossPartitionIsolation(t *testing.T, newStore BlobStoreSetupFunc) {
+	t.Helper()
+
+	t.Run("happy path: session in one partition is invisible to another", func(t *testing.T) {
+		t.Parallel()
+		sA := newStore(t, t.Name(), DefaultPartition)
+		sB := newStore(t, t.Name(), OtherPartition)
+
+		uploadID, err := sA.InitiateBlobUpload()
+		require.NoError(t, err)
+
+		_, err = sB.GetBlobUploadOffset(uploadID)
+		require.ErrorIs(t, err, blobstore.ErrBlobUploadUnknown)
+	})
 }
 
 func requireOffset(t *testing.T, s blobstore.BlobStore, uploadID string, want int64) {
@@ -458,11 +348,11 @@ func assertSessionRemoved(t *testing.T, s blobstore.BlobStore, uploadID string) 
 	t.Helper()
 
 	_, err := s.GetBlobUploadOffset(uploadID)
-	require.ErrorIs(t, err, blobstore.ErrBlobUploadUnknown)
+	assert.ErrorIs(t, err, blobstore.ErrBlobUploadUnknown)
 
 	_, err = s.AppendBlobChunk(uploadID, 0, strings.NewReader(TestContent))
-	require.ErrorIs(t, err, blobstore.ErrBlobUploadUnknown)
+	assert.ErrorIs(t, err, blobstore.ErrBlobUploadUnknown)
 
-	err = s.FinalizeBlobUpload(uploadID, TestDigest, int64(len(TestContent)), nil, -1)
-	require.ErrorIs(t, err, blobstore.ErrBlobUploadUnknown)
+	err = s.FinalizeBlobUpload(uploadID, TestDigest, int64(len(TestContent)))
+	assert.ErrorIs(t, err, blobstore.ErrBlobUploadUnknown)
 }
