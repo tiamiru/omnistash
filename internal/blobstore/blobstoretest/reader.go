@@ -84,7 +84,9 @@ func exerciseGetBlob(t *testing.T, newStore BlobStoreSetupFunc) {
 				assert.Equal(t, int64(0), size)
 			} else {
 				require.NoError(t, err)
-				t.Cleanup(func() { assert.NoError(t, rc.Close()) })
+				t.Cleanup(func() {
+					assert.NoError(t, rc.Close())
+				})
 				assert.Equal(t, tc.wantSize, size)
 				data, _ := io.ReadAll(rc)
 				assert.Equal(t, tc.wantContent, string(data))

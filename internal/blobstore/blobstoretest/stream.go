@@ -237,7 +237,9 @@ func exerciseMonolithicUpload(t *testing.T, newStore BlobStoreSetupFunc) {
 
 		rc, size, err := s.GetBlob(TestDigest)
 		require.NoError(t, err)
-		t.Cleanup(func() { assert.NoError(t, rc.Close()) })
+		t.Cleanup(func() {
+			assert.NoError(t, rc.Close())
+		})
 		assert.Equal(t, int64(len(TestContent)), size)
 		data, _ := io.ReadAll(rc)
 		assert.Equal(t, TestContent, string(data))
@@ -269,7 +271,9 @@ func exerciseChunkedUpload(t *testing.T, newStore BlobStoreSetupFunc) {
 
 		rc, size, err := s.GetBlob(TestDigest)
 		require.NoError(t, err)
-		t.Cleanup(func() { assert.NoError(t, rc.Close()) })
+		t.Cleanup(func() {
+			assert.NoError(t, rc.Close())
+		})
 		assert.Equal(t, int64(len(TestContent)), size)
 		data, _ := io.ReadAll(rc)
 		assert.Equal(t, TestContent, string(data))
@@ -313,7 +317,9 @@ func exerciseEmptyBlobUpload(t *testing.T, newStore BlobStoreSetupFunc) {
 
 		rc, size, err := s.GetBlob(EmptyDigest)
 		require.NoError(t, err)
-		t.Cleanup(func() { assert.NoError(t, rc.Close()) })
+		t.Cleanup(func() {
+			assert.NoError(t, rc.Close())
+		})
 		assert.Equal(t, int64(0), size)
 		data, _ := io.ReadAll(rc)
 		assert.Empty(t, data)
