@@ -81,17 +81,14 @@ jobs:
       actions: read
       checks: write
     steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/download-artifact@v7
-        with:
-          name: junit
-
       - uses: dorny/test-reporter@v3
         with:
           name: Go Tests
+          artifact: junit
           path: junit.xml
           reporter: java-junit
+          report-title: Test Results
+          fail-on-error: 'true'
 
   coverage:
     name: Coverage Report
@@ -105,8 +102,11 @@ jobs:
     steps:
       - uses: fgrosse/go-coverage-report@v1.3.0
         with:
+          version: v1.3.0
+          sha256sum: 6dd92e7fea149747df51faa11c3aed55497822175d856b440c866e7a9b76a090
           coverage-artifact-name: "coverage"
           coverage-file-name: "coverage.out"
+          github-baseline-workflow-ref: main.yml
 
   build:
     name: Build
