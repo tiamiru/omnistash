@@ -16,4 +16,5 @@ func ExerciseBlobStoreContract(t *testing.T, newStore BlobStoreSetupFunc) {
 	ExerciseBlobReaderContract(t, newStore)
 	ExerciseBlobDeleterContract(t, newStore)
 	ExerciseBlobUploaderContract(t, newStore)
+	ExercisePartitionIsolationContract(t, newStore)
 }
