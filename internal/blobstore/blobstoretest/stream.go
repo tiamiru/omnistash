@@ -58,7 +58,7 @@ func ExerciseBlobUploaderContract(t *testing.T, newStore BlobStoreSetupFunc) {
 func exerciseInitiateBlobUpload(t *testing.T, newStore BlobStoreSetupFunc) {
 	t.Helper()
 
-	t.Run("happy: returns a unique upload ID", func(t *testing.T) {
+	t.Run("happy path: returns a unique upload ID", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
@@ -75,7 +75,7 @@ func exerciseInitiateBlobUpload(t *testing.T, newStore BlobStoreSetupFunc) {
 func exerciseGetBlobUploadOffset(t *testing.T, newStore BlobStoreSetupFunc) {
 	t.Helper()
 
-	t.Run("error: unknown session returns ErrBlobUploadUnknown", func(t *testing.T) {
+	t.Run("error path: unknown session returns ErrBlobUploadUnknown", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
@@ -83,7 +83,7 @@ func exerciseGetBlobUploadOffset(t *testing.T, newStore BlobStoreSetupFunc) {
 		require.ErrorIs(t, err, blobstore.ErrBlobUploadUnknown)
 	})
 
-	t.Run("happy: fresh session returns offset 0", func(t *testing.T) {
+	t.Run("happy path: fresh session returns offset 0", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
@@ -99,7 +99,7 @@ const wrongOffset = 5
 func exerciseAppendBlobChunk(t *testing.T, newStore BlobStoreSetupFunc) {
 	t.Helper()
 
-	t.Run("error: unknown session returns ErrBlobUploadUnknown", func(t *testing.T) {
+	t.Run("error path: unknown session returns ErrBlobUploadUnknown", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
@@ -107,7 +107,7 @@ func exerciseAppendBlobChunk(t *testing.T, newStore BlobStoreSetupFunc) {
 		require.ErrorIs(t, err, blobstore.ErrBlobUploadUnknown)
 	})
 
-	t.Run("error: negative offset returns ErrBlobUploadInvalid and preserves offset", func(t *testing.T) {
+	t.Run("error path: negative offset returns ErrBlobUploadInvalid and preserves offset", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
@@ -120,7 +120,7 @@ func exerciseAppendBlobChunk(t *testing.T, newStore BlobStoreSetupFunc) {
 		requireOffset(t, s, uploadID, 0)
 	})
 
-	t.Run("error: wrong offset returns ErrRangeNotSatisfiable and preserves offset", func(t *testing.T) {
+	t.Run("error path: wrong offset returns ErrRangeNotSatisfiable and preserves offset", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
@@ -133,7 +133,7 @@ func exerciseAppendBlobChunk(t *testing.T, newStore BlobStoreSetupFunc) {
 		requireOffset(t, s, uploadID, 0)
 	})
 
-	t.Run("happy: returns new total size and advances offset", func(t *testing.T) {
+	t.Run("happy path: returns new total size and advances offset", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
@@ -180,7 +180,7 @@ func exerciseFinalizeBlobUploadErrors(t *testing.T, newStore BlobStoreSetupFunc)
 func exerciseFinalizeBlobUploadSessionErrors(t *testing.T, newStore BlobStoreSetupFunc) {
 	t.Helper()
 
-	t.Run("error: unknown session returns ErrBlobUploadUnknown", func(t *testing.T) {
+	t.Run("error path: unknown session returns ErrBlobUploadUnknown", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
@@ -194,7 +194,7 @@ func exerciseFinalizeBlobUploadSessionErrors(t *testing.T, newStore BlobStoreSet
 		require.ErrorIs(t, err, blobstore.ErrBlobUploadUnknown)
 	})
 
-	t.Run("error: malformed digest returns ErrInvalidDigest and preserves session", func(t *testing.T) {
+	t.Run("error path: malformed digest returns ErrInvalidDigest and preserves session", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
@@ -218,7 +218,7 @@ func exerciseFinalizeBlobUploadOffsetErrors(t *testing.T, newStore BlobStoreSetu
 	t.Helper()
 
 	t.Run(
-		"error: wrong final chunk offset on fresh session returns ErrRangeNotSatisfiable and preserves session",
+		"error path: wrong final chunk offset on fresh session returns ErrRangeNotSatisfiable and preserves session",
 		func(t *testing.T) {
 			t.Parallel()
 			s := newStore(t, t.Name(), DefaultPartition)
@@ -235,7 +235,7 @@ func exerciseFinalizeBlobUploadOffsetErrors(t *testing.T, newStore BlobStoreSetu
 	)
 
 	t.Run(
-		"error: wrong final chunk offset with prior appends returns ErrRangeNotSatisfiable and preserves session",
+		"error path: wrong final chunk offset with prior appends returns ErrRangeNotSatisfiable and preserves session",
 		func(t *testing.T) {
 			t.Parallel()
 			s := newStore(t, t.Name(), DefaultPartition)
@@ -257,7 +257,7 @@ func exerciseFinalizeBlobUploadOffsetErrors(t *testing.T, newStore BlobStoreSetu
 func exerciseFinalizeBlobUploadSizeErrors(t *testing.T, newStore BlobStoreSetupFunc) {
 	t.Helper()
 
-	t.Run("error: size too large returns ErrSizeInvalid and leaves session for vacuum", func(t *testing.T) {
+	t.Run("error path: size too large returns ErrSizeInvalid and leaves session for vacuum", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
@@ -278,7 +278,7 @@ func exerciseFinalizeBlobUploadSizeErrors(t *testing.T, newStore BlobStoreSetupF
 		require.ErrorIs(t, offsetErr, blobstore.ErrBlobUploadUnknown)
 	})
 
-	t.Run("error: size too small returns ErrSizeInvalid and leaves session for vacuum", func(t *testing.T) {
+	t.Run("error path: size too small returns ErrSizeInvalid and leaves session for vacuum", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
@@ -303,7 +303,7 @@ func exerciseFinalizeBlobUploadSizeErrors(t *testing.T, newStore BlobStoreSetupF
 func exerciseFinalizeBlobUploadContentErrors(t *testing.T, newStore BlobStoreSetupFunc) {
 	t.Helper()
 
-	t.Run("error: digest mismatch returns ErrDigestMismatch and leaves session for vacuum", func(t *testing.T) {
+	t.Run("error path: digest mismatch returns ErrDigestMismatch and leaves session for vacuum", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
@@ -324,7 +324,7 @@ func exerciseFinalizeBlobUploadContentErrors(t *testing.T, newStore BlobStoreSet
 		require.ErrorIs(t, offsetErr, blobstore.ErrBlobUploadUnknown)
 	})
 
-	t.Run("error: already committed returns ErrBlobCommitted and removes session", func(t *testing.T) {
+	t.Run("error path: already committed returns ErrBlobCommitted and removes session", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 		seedTestBlob(t, s)
@@ -343,7 +343,7 @@ func exerciseFinalizeBlobUploadContentErrors(t *testing.T, newStore BlobStoreSet
 func exerciseMonolithicUpload(t *testing.T, newStore BlobStoreSetupFunc) {
 	t.Helper()
 
-	t.Run("happy: content in final chunk is committed and session removed", func(t *testing.T) {
+	t.Run("happy path: content in final chunk is committed and session removed", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
@@ -367,7 +367,7 @@ func exerciseMonolithicUpload(t *testing.T, newStore BlobStoreSetupFunc) {
 func exerciseChunkedUpload(t *testing.T, newStore BlobStoreSetupFunc) {
 	t.Helper()
 
-	t.Run("happy: multiple appends committed and session removed", func(t *testing.T) {
+	t.Run("happy path: multiple appends committed and session removed", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
@@ -399,7 +399,7 @@ func exerciseChunkedUpload(t *testing.T, newStore BlobStoreSetupFunc) {
 func exerciseSplitUpload(t *testing.T, newStore BlobStoreSetupFunc) {
 	t.Helper()
 
-	t.Run("happy: partial appends plus final chunk committed and session removed", func(t *testing.T) {
+	t.Run("happy path: partial appends plus final chunk committed and session removed", func(t *testing.T) {
 		t.Parallel()
 		s := newStore(t, t.Name(), DefaultPartition)
 
