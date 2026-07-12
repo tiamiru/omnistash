@@ -17,109 +17,88 @@ import (
 
 func TestFindStaleStagingEntries(t *testing.T) {
 	t.Parallel()
-
-	t.Run("happy path: only entries past grace period are returned", func(t *testing.T) {
-		t.Parallel()
-		dir := t.TempDir()
-		now := time.Now()
-		stale := filepath.Join(dir, "stale")
-		fresh := filepath.Join(dir, "fresh")
-		require.NoError(t, os.WriteFile(stale, []byte("x"), 0o600))
-		require.NoError(t, os.WriteFile(fresh, []byte("x"), 0o600))
-		require.NoError(t, os.Chtimes(stale, now.Add(-time.Hour), now.Add(-time.Hour)))
-
-		entries, statErrs, walkErr := findStaleStagingEntries(t.Context(), dir, time.Minute, now)
-
-		require.NoError(t, walkErr)
-		assert.Empty(t, statErrs)
-		assert.Equal(t, []string{stale}, entries)
-	})
-
-	t.Run("edge case: empty directory returns no entries", func(t *testing.T) {
-		t.Parallel()
-		dir := t.TempDir()
-
-		entries, statErrs, walkErr := findStaleStagingEntries(t.Context(), dir, 0, time.Now())
-
-		require.NoError(t, walkErr)
-		assert.Empty(t, statErrs)
-		assert.Empty(t, entries)
-	})
-
-	t.Run("error path: canceled context aborts the walk", func(t *testing.T) {
-		t.Parallel()
-		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "a"), []byte("x"), 0o600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "b"), []byte("x"), 0o600))
-
-		ctx, cancel := context.WithCancel(t.Context())
-		cancel()
-
-		_, _, walkErr := findStaleStagingEntries(ctx, dir, 0, time.Now())
-
-		require.ErrorIs(t, walkErr, context.Canceled)
-	})
-
-	t.Run("edge case: absent directory returns no entries", func(t *testing.T) {
-		t.Parallel()
-		dir := filepath.Join(t.TempDir(), "nonexistent")
-
-		entries, statErrs, walkErr := findStaleStagingEntries(t.Context(), dir, 0, time.Now())
-
-		require.ErrorIs(t, walkErr, os.ErrNotExist)
-		assert.Empty(t, statErrs)
-		assert.Empty(t, entries)
-	})
-}
-
-func TestFindStaleStagingEntries_GracePeriodBoundary(t *testing.T) {
-	t.Parallel()
+	now := time.Now()
 	const gracePeriod = time.Minute
 
 	testCases := []struct {
-		name      string
-		age       time.Duration
-		wantStale bool
+		name             string
+		setup            func(t *testing.T, dir string)
+		absentDir        bool
+		cancelCtx        bool
+		gracePeriod      time.Duration
+		wantStaleEntries []string
+		wantWalkErr      error
 	}{
 		{
-			name:      "happy path: well past grace period is stale",
-			age:       time.Hour,
-			wantStale: true,
+			name: "error path: canceled context aborts the walk",
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "a"), []byte("x"), 0o600))
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "b"), []byte("x"), 0o600))
+			},
+			cancelCtx:   true,
+			gracePeriod: 0,
+			wantWalkErr: context.Canceled,
 		},
 		{
-			name:      "happy path: freshly written entry is preserved",
-			age:       0,
-			wantStale: false,
+			name:        "edge case: absent directory returns walk error",
+			absentDir:   true,
+			gracePeriod: 0,
+			wantWalkErr: os.ErrNotExist,
 		},
 		{
-			name:      "edge case: exactly at grace period boundary is stale",
-			age:       gracePeriod,
-			wantStale: true,
+			name:        "edge case: empty directory returns no entries",
+			gracePeriod: 0,
 		},
 		{
-			name:      "edge case: just under grace period boundary is preserved",
-			age:       gracePeriod - time.Millisecond,
-			wantStale: false,
+			name: "edge case: exactly at grace period boundary is stale",
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+				f := filepath.Join(dir, "entry")
+				require.NoError(t, os.WriteFile(f, []byte("x"), 0o600))
+				require.NoError(t, os.Chtimes(f, now.Add(-gracePeriod), now.Add(-gracePeriod)))
+			},
+			gracePeriod:      gracePeriod,
+			wantStaleEntries: []string{"entry"},
+		},
+		{
+			name: "edge case: just under grace period boundary is preserved",
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+				f := filepath.Join(dir, "entry")
+				require.NoError(t, os.WriteFile(f, []byte("x"), 0o600))
+				modTime := now.Add(-(gracePeriod - time.Millisecond))
+				require.NoError(t, os.Chtimes(f, modTime, modTime))
+			},
+			gracePeriod: gracePeriod,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
-			now := time.Now()
-			entry := filepath.Join(dir, "entry")
-			require.NoError(t, os.WriteFile(entry, []byte("x"), 0o600))
-			require.NoError(t, os.Chtimes(entry, now.Add(-tc.age), now.Add(-tc.age)))
-
-			entries, statErrs, walkErr := findStaleStagingEntries(t.Context(), dir, gracePeriod, now)
-
-			require.NoError(t, walkErr)
-			assert.Empty(t, statErrs)
-			if tc.wantStale {
-				assert.Equal(t, []string{entry}, entries)
-			} else {
-				assert.Empty(t, entries)
+			if tc.absentDir {
+				dir = filepath.Join(dir, "nonexistent")
 			}
+			if tc.setup != nil {
+				tc.setup(t, dir)
+			}
+			ctx := t.Context()
+			if tc.cancelCtx {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+
+			entries, statErrs, walkErr := findStaleStagingEntries(ctx, dir, tc.gracePeriod, now)
+
+			require.ErrorIs(t, walkErr, tc.wantWalkErr)
+			assert.Empty(t, statErrs)
+			var wantEntries []string
+			for _, name := range tc.wantStaleEntries {
+				wantEntries = append(wantEntries, filepath.Join(dir, name))
+			}
+			assert.Equal(t, wantEntries, entries)
 		})
 	}
 }
@@ -127,73 +106,102 @@ func TestFindStaleStagingEntries_GracePeriodBoundary(t *testing.T) {
 func TestRemoveCommandPaths(t *testing.T) {
 	t.Parallel()
 
-	testCases := []struct {
-		name        string
-		setup       func(t *testing.T, dir string)
-		makePath    func(dir string) string
-		wantRemoved int
-	}{
-		{
-			name: "happy path: removes existing file",
-			setup: func(t *testing.T, dir string) {
-				t.Helper()
-				require.NoError(t, os.WriteFile(filepath.Join(dir, "f"), []byte("x"), 0o600))
-			},
-			makePath:    func(dir string) string { return filepath.Join(dir, "f") },
-			wantRemoved: 1,
-		},
-		{
-			name:        "edge case: absent entry is silently skipped",
-			makePath:    func(dir string) string { return filepath.Join(dir, "missing") },
-			wantRemoved: 0,
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			dir := t.TempDir()
-			if tc.setup != nil {
-				tc.setup(t, dir)
-			}
-			root, err := os.OpenRoot(dir)
-			require.NoError(t, err)
-			t.Cleanup(func() { assert.NoError(t, root.Close()) })
+	makeRoot := func(t *testing.T) (*os.Root, string) {
+		t.Helper()
+		dir := t.TempDir()
+		root, err := os.OpenRoot(dir)
+		require.NoError(t, err)
+		t.Cleanup(func() { assert.NoError(t, root.Close()) })
 
-			path := tc.makePath(dir)
-			cmd := batchDeleteBlobCommand{root: root, paths: []string{path}}
-			result := removeCommandPaths(cmd)
-
-			require.NoError(t, result.errs[0])
-			assert.Equal(t, tc.wantRemoved, result.removed)
-			_, statErr := os.Stat(path)
-			assert.ErrorIs(t, statErr, os.ErrNotExist)
-		})
+		return root, dir
 	}
+
+	t.Run("error path: absolute path outside root returns path error", func(t *testing.T) {
+		t.Parallel()
+		root, _ := makeRoot(t)
+
+		result := removeCommandPaths(batchDeleteBlobCommand{root: root, paths: []string{"/etc/passwd"}})
+
+		require.Error(t, result.errs[0])
+		assert.Equal(t, 0, result.removed)
+	})
+
+	t.Run("error path: path in sibling directory returns path error", func(t *testing.T) {
+		t.Parallel()
+		root, dir := makeRoot(t)
+
+		result := removeCommandPaths(
+			batchDeleteBlobCommand{root: root, paths: []string{filepath.Join(dir, "..", "escape")}},
+		)
+
+		require.Error(t, result.errs[0])
+		assert.Equal(t, 0, result.removed)
+	})
+
+	t.Run("error path: path equal to root dir returns path error", func(t *testing.T) {
+		t.Parallel()
+		root, dir := makeRoot(t)
+
+		result := removeCommandPaths(batchDeleteBlobCommand{root: root, paths: []string{dir}})
+
+		require.ErrorIs(t, result.errs[0], errPathEscapesRoot)
+		assert.Equal(t, 0, result.removed)
+	})
+
+	t.Run("edge case: absent entry is silently skipped", func(t *testing.T) {
+		t.Parallel()
+		root, dir := makeRoot(t)
+
+		result := removeCommandPaths(batchDeleteBlobCommand{root: root, paths: []string{filepath.Join(dir, "missing")}})
+
+		require.NoError(t, result.errs[0])
+		assert.Equal(t, 0, result.removed)
+	})
+
+	t.Run("happy path: removes existing file", func(t *testing.T) {
+		t.Parallel()
+		root, dir := makeRoot(t)
+		f := filepath.Join(dir, "f")
+		require.NoError(t, os.WriteFile(f, []byte("x"), 0o600))
+
+		result := removeCommandPaths(batchDeleteBlobCommand{root: root, paths: []string{f}})
+
+		require.NoError(t, result.errs[0])
+		assert.Equal(t, 1, result.removed)
+		_, statErr := os.Stat(f)
+		assert.ErrorIs(t, statErr, os.ErrNotExist)
+	})
 }
 
-func TestVacuumManagerStop(t *testing.T) {
+func TestVacuumManager(t *testing.T) {
 	t.Parallel()
-	m := newVacuumManager(slog.Default())
-	stop := m.Start()
 
-	err := stop()
+	t.Run("edge case: second Start returns nil while first is running", func(t *testing.T) {
+		t.Parallel()
+		m := newVacuumManager(slog.Default())
+		stop := m.Start()
+		t.Cleanup(func() { assert.NoError(t, stop()) })
 
-	require.NoError(t, err)
-}
+		nilStop := m.Start()
+		require.Nil(t, nilStop)
 
-func TestVacuumManagerDoubleStart(t *testing.T) {
-	t.Parallel()
-	m := newVacuumManager(slog.Default())
-	stop := m.Start()
-	t.Cleanup(func() { assert.NoError(t, stop()) })
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "f"), []byte("x"), 0o600))
+		_, _, removeBatchErr := m.removeBatch(t.Context(), dir, []string{filepath.Join(dir, "f")})
+		require.NoError(t, removeBatchErr)
+	})
 
-	nilStop := m.Start()
-	require.Nil(t, nilStop)
+	t.Run("edge case: stop is idempotent", func(t *testing.T) {
+		t.Parallel()
+		m := newVacuumManager(slog.Default())
+		stop := m.Start()
 
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "f"), []byte("x"), 0o600))
-	_, _, removeBatchErr := m.removeBatch(t.Context(), dir, []string{filepath.Join(dir, "f")})
-	require.NoError(t, removeBatchErr)
+		err1 := stop()
+		err2 := stop()
+
+		require.NoError(t, err1)
+		require.NoError(t, err2)
+	})
 }
 
 func TestRemoveBatch_NotStarted(t *testing.T) {
@@ -220,25 +228,6 @@ func TestRemoveBatch(t *testing.T) {
 		wantRemain  []string
 	}{
 		{
-			name: "happy path: dispatches every path to a worker and removes all files",
-			setup: func(t *testing.T, dir string) {
-				t.Helper()
-				require.NoError(t, os.WriteFile(filepath.Join(dir, "a"), []byte("x"), 0o600))
-				require.NoError(t, os.WriteFile(filepath.Join(dir, "b"), []byte("x"), 0o600))
-			},
-			makePaths:   func(dir string) []string { return []string{filepath.Join(dir, "a"), filepath.Join(dir, "b")} },
-			wantRemoved: []string{"a", "b"},
-		},
-		{
-			name: "edge case: missing entries in the batch are treated as success",
-			setup: func(t *testing.T, dir string) {
-				t.Helper()
-				require.NoError(t, os.WriteFile(filepath.Join(dir, "a"), []byte("x"), 0o600))
-			},
-			makePaths:   func(dir string) []string { return []string{filepath.Join(dir, "a"), filepath.Join(dir, "missing")} },
-			wantRemoved: []string{"a"},
-		},
-		{
 			name: "error path: a genuine removal failure is returned without blocking the rest of the batch",
 			setup: func(t *testing.T, dir string) {
 				t.Helper()
@@ -253,18 +242,30 @@ func TestRemoveBatch(t *testing.T) {
 			wantRemain:  []string{"nonempty"},
 		},
 		{
-			name:        "error path: absolute path outside root returns a path error",
-			makePaths:   func(dir string) []string { return []string{"/etc/passwd"} },
-			wantPathErr: true,
+			name:      "edge case: empty paths list is a no-op",
+			makePaths: func(dir string) []string { return []string{} },
 		},
 		{
-			name: "error path: path in a sibling directory returns a path error",
-			makePaths: func(dir string) []string {
-				return []string{filepath.Join(dir, "..", "escape")}
+			name: "edge case: missing entries in the batch are treated as success",
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "a"), []byte("x"), 0o600))
 			},
-			wantPathErr: true,
+			makePaths:   func(dir string) []string { return []string{filepath.Join(dir, "a"), filepath.Join(dir, "missing")} },
+			wantRemoved: []string{"a"},
+		},
+		{
+			name: "happy path: dispatches every path to a worker and removes all files",
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "a"), []byte("x"), 0o600))
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "b"), []byte("x"), 0o600))
+			},
+			makePaths:   func(dir string) []string { return []string{filepath.Join(dir, "a"), filepath.Join(dir, "b")} },
+			wantRemoved: []string{"a", "b"},
 		},
 	}
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -311,43 +312,6 @@ func TestRemoveBatch(t *testing.T) {
 func TestVacuumStagingBlobs(t *testing.T) {
 	t.Parallel()
 
-	t.Run("happy path: removes stale staging files and preserves fresh ones", func(t *testing.T) {
-		t.Parallel()
-		baseDir := t.TempDir()
-		now := time.Now()
-		clk := clocktest.NewFake(now)
-		s := NewFilesystemBlobStore(baseDir, blobstore.PartitionBlobs, WithClock(clk))
-		s.StartVacuumProcess()
-		t.Cleanup(func() { assert.NoError(t, s.StopVacuumProcess()) })
-
-		stagingDir := filepath.Join(baseDir, string(blobstore.PartitionBlobs), ".staging")
-		require.NoError(t, os.MkdirAll(stagingDir, 0o750))
-		stale := filepath.Join(stagingDir, "stale")
-		fresh := filepath.Join(stagingDir, "fresh")
-		require.NoError(t, os.WriteFile(stale, []byte("x"), 0o600))
-		require.NoError(t, os.WriteFile(fresh, []byte("x"), 0o600))
-		require.NoError(t, os.Chtimes(stale, now.Add(-time.Hour), now.Add(-time.Hour)))
-
-		err := s.VacuumStagingBlobs(t.Context(), time.Minute)
-
-		require.NoError(t, err)
-		_, statErr := os.Stat(stale)
-		require.ErrorIs(t, statErr, os.ErrNotExist)
-		_, statErr = os.Stat(fresh)
-		assert.NoError(t, statErr)
-	})
-
-	t.Run("edge case: absent staging dir is a no-op", func(t *testing.T) {
-		t.Parallel()
-		s := NewFilesystemBlobStore(t.TempDir(), blobstore.PartitionBlobs)
-		s.StartVacuumProcess()
-		t.Cleanup(func() { assert.NoError(t, s.StopVacuumProcess()) })
-
-		err := s.VacuumStagingBlobs(t.Context(), time.Minute)
-
-		require.NoError(t, err)
-	})
-
 	t.Run("error path: canceled context returns error immediately", func(t *testing.T) {
 		t.Parallel()
 		s := NewFilesystemBlobStore(t.TempDir(), blobstore.PartitionBlobs)
@@ -376,5 +340,59 @@ func TestVacuumStagingBlobs(t *testing.T) {
 		err := s.VacuumStagingBlobs(t.Context(), time.Minute)
 
 		require.ErrorIs(t, err, errVacuumNotStarted)
+	})
+
+	t.Run("error path: unreadable staging dir propagates walk error", func(t *testing.T) {
+		t.Parallel()
+		baseDir := t.TempDir()
+		stagingDir := filepath.Join(baseDir, string(blobstore.PartitionBlobs), ".staging")
+		require.NoError(t, os.MkdirAll(stagingDir, 0o750))
+		require.NoError(t, os.Chmod(stagingDir, 0o000))
+		t.Cleanup(func() { _ = os.Chmod(stagingDir, 0o600) })
+		s := NewFilesystemBlobStore(baseDir, blobstore.PartitionBlobs)
+		s.StartVacuumProcess()
+		t.Cleanup(func() { assert.NoError(t, s.StopVacuumProcess()) })
+
+		err := s.VacuumStagingBlobs(t.Context(), time.Minute)
+
+		require.ErrorIs(t, err, os.ErrPermission)
+	})
+
+	t.Run("edge case: absent staging dir is a no-op", func(t *testing.T) {
+		t.Parallel()
+		s := NewFilesystemBlobStore(t.TempDir(), blobstore.PartitionBlobs)
+		s.StartVacuumProcess()
+		t.Cleanup(func() { assert.NoError(t, s.StopVacuumProcess()) })
+
+		err := s.VacuumStagingBlobs(t.Context(), time.Minute)
+
+		require.NoError(t, err)
+	})
+
+	t.Run("happy path: removes stale staging files and preserves fresh ones", func(t *testing.T) {
+		t.Parallel()
+		baseDir := t.TempDir()
+		now := time.Now()
+		clk := clocktest.NewFake(now)
+		s := NewFilesystemBlobStore(baseDir, blobstore.PartitionBlobs, WithClock(clk))
+		s.StartVacuumProcess()
+		t.Cleanup(func() { assert.NoError(t, s.StopVacuumProcess()) })
+
+		stagingDir := filepath.Join(baseDir, string(blobstore.PartitionBlobs), ".staging")
+		require.NoError(t, os.MkdirAll(stagingDir, 0o750))
+		stale := filepath.Join(stagingDir, "stale")
+		fresh := filepath.Join(stagingDir, "fresh")
+		require.NoError(t, os.WriteFile(stale, []byte("x"), 0o600))
+		require.NoError(t, os.WriteFile(fresh, []byte("x"), 0o600))
+		require.NoError(t, os.Chtimes(stale, now.Add(-time.Hour), now.Add(-time.Hour)))
+		require.NoError(t, os.Chtimes(fresh, now, now))
+
+		err := s.VacuumStagingBlobs(t.Context(), time.Minute)
+
+		require.NoError(t, err)
+		_, statErr := os.Stat(stale)
+		require.ErrorIs(t, statErr, os.ErrNotExist)
+		_, statErr = os.Stat(fresh)
+		assert.NoError(t, statErr)
 	})
 }
