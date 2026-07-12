@@ -19,8 +19,8 @@ const (
 
 	ZeroDigest digest.Digest = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 
-	EmptyContent                 = ""
-	EmptyDigest    digest.Digest = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	EmptyContent               = ""
+	EmptyDigest  digest.Digest = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 	TestContent                 = "{}"
 	TestDigest    digest.Digest = "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"

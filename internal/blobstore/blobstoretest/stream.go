@@ -143,7 +143,7 @@ func exerciseAppendBlobChunk(t *testing.T, newStore BlobStoreSetupFunc) {
 		requireOffset(t, s, uploadID, int64(len(TestContent)))
 	})
 }
-func exerciseFinalizeBlobUploadErrors(t *testing.T, newStore BlobStoreSetupFunc) {
+func exerciseFinalizeBlobUploadErrors(t *testing.T, newStore BlobStoreSetupFunc) { //nolint:funlen
 	t.Helper()
 
 	t.Run("error path: unknown session returns ErrBlobUploadUnknown", func(t *testing.T) {
@@ -348,11 +348,11 @@ func assertSessionRemoved(t *testing.T, s blobstore.BlobStore, uploadID string) 
 	t.Helper()
 
 	_, err := s.GetBlobUploadOffset(uploadID)
-	assert.ErrorIs(t, err, blobstore.ErrBlobUploadUnknown)
+	require.ErrorIs(t, err, blobstore.ErrBlobUploadUnknown)
 
 	_, err = s.AppendBlobChunk(uploadID, 0, strings.NewReader(TestContent))
-	assert.ErrorIs(t, err, blobstore.ErrBlobUploadUnknown)
+	require.ErrorIs(t, err, blobstore.ErrBlobUploadUnknown)
 
 	err = s.FinalizeBlobUpload(uploadID, TestDigest, int64(len(TestContent)))
-	assert.ErrorIs(t, err, blobstore.ErrBlobUploadUnknown)
+	require.ErrorIs(t, err, blobstore.ErrBlobUploadUnknown)
 }

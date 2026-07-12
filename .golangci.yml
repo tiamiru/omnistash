@@ -47,6 +47,7 @@ linters:
     - path: 'blobstoretest/'
       linters:
         - goconst
+        - mnd
 
   settings:
     mnd:
