@@ -26,12 +26,15 @@ var (
 	ErrInvalidRange        = errors.New("invalid range")
 	ErrRangeNotSatisfiable = errors.New("range not satisfiable")
 	ErrPartialDeletion     = errors.New("partial deletion")
+	ErrBlobUploadUnknown   = errors.New("upload not found")
+	ErrBlobUploadInvalid   = errors.New("invalid upload")
 )
 
 type BlobStore interface {
 	BlobReader
 	BlobWriter
 	BlobDeleter
+	BlobUploader
 }
 
 type BlobReader interface {
@@ -57,6 +60,24 @@ type BlobWriter interface {
 
 	// StatBlob returns the size of the blob without reading its content.
 	StatBlob(digest digest.Digest) (int64, error)
+}
+
+type BlobUploader interface {
+	// InitiateBlobUpload creates a new staging area for a resumable upload and returns a unique upload ID.
+	InitiateBlobUpload() (uploadID string, err error)
+
+	// AppendBlobChunk appends r at offset to the upload and returns the new total byte offset.
+	AppendBlobChunk(uploadID string, offset int64, r io.Reader) (int64, error)
+
+	// GetBlobUploadOffset returns the number of bytes received so far for the upload.
+	GetBlobUploadOffset(uploadID string) (int64, error)
+
+	// FinalizeBlobUpload appends the final chunk, verifies digest and size, and commits the blob.
+	// Returns ErrBlobCommitted if the digest was already committed concurrently.
+	FinalizeBlobUpload(uploadID string, d digest.Digest, size int64, r io.Reader, finalChunkOffset int64) error
+
+	// CancelBlobUpload discards the upload and removes all temporary resources. A second call is a no-op.
+	CancelBlobUpload(uploadID string) error
 }
 
 // BlobVacuumer manages the lifecycle of the background vacuum process and exposes

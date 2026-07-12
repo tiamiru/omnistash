@@ -1,7 +1,9 @@
 package fs
 
 import (
+	"errors"
 	"fmt"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 
@@ -23,4 +25,12 @@ func removeFileIfExists(path string) error {
 	}
 
 	return nil
+}
+
+func mapNotExistErr(err, notExistErr error) error {
+	if errors.Is(err, iofs.ErrNotExist) {
+		return notExistErr
+	}
+
+	return err
 }
