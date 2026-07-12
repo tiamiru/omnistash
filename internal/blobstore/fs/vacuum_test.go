@@ -116,61 +116,76 @@ func TestRemoveCommandPaths(t *testing.T) {
 		return root, dir
 	}
 
-	t.Run("error path: absolute path outside root returns path error", func(t *testing.T) {
-		t.Parallel()
-		root, _ := makeRoot(t)
+	testCases := []struct {
+		name        string
+		setup       func(t *testing.T, dir string)
+		paths       []string // absolute paths used as-is; relative paths joined with dir
+		wantErr     error
+		wantRemoved int
+		wantGone    []string
+	}{
+		{
+			name:    "error path: absolute path outside root returns path error",
+			paths:   []string{"/etc/passwd"},
+			wantErr: errPathEscapesRoot,
+		},
+		{
+			name:    "error path: path in sibling directory returns path error",
+			paths:   []string{"../escape"},
+			wantErr: errPathEscapesRoot,
+		},
+		{
+			name:    "error path: path equal to root dir returns path error",
+			paths:   []string{"."},
+			wantErr: errPathEscapesRoot,
+		},
+		{
+			name:  "edge case: absent entry is silently skipped",
+			paths: []string{"missing"},
+		},
+		{
+			name: "happy path: removes existing file",
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "f"), []byte("x"), 0o600))
+			},
+			paths:       []string{"f"},
+			wantRemoved: 1,
+			wantGone:    []string{"f"},
+		},
+	}
 
-		result := removeCommandPaths(batchDeleteBlobCommand{root: root, paths: []string{"/etc/passwd"}})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			root, dir := makeRoot(t)
+			if tc.setup != nil {
+				tc.setup(t, dir)
+			}
 
-		require.Error(t, result.errs[0])
-		assert.Equal(t, 0, result.removed)
-	})
+			paths := make([]string, len(tc.paths))
+			for i, p := range tc.paths {
+				if filepath.IsAbs(p) {
+					paths[i] = p
+				} else {
+					paths[i] = filepath.Join(dir, p)
+				}
+			}
+			result := removeCommandPaths(batchDeleteBlobCommand{root: root, paths: paths})
 
-	t.Run("error path: path in sibling directory returns path error", func(t *testing.T) {
-		t.Parallel()
-		root, dir := makeRoot(t)
+			if tc.wantErr != nil {
+				require.ErrorIs(t, result.errs[0], tc.wantErr)
 
-		result := removeCommandPaths(
-			batchDeleteBlobCommand{root: root, paths: []string{filepath.Join(dir, "..", "escape")}},
-		)
-
-		require.Error(t, result.errs[0])
-		assert.Equal(t, 0, result.removed)
-	})
-
-	t.Run("error path: path equal to root dir returns path error", func(t *testing.T) {
-		t.Parallel()
-		root, dir := makeRoot(t)
-
-		result := removeCommandPaths(batchDeleteBlobCommand{root: root, paths: []string{dir}})
-
-		require.ErrorIs(t, result.errs[0], errPathEscapesRoot)
-		assert.Equal(t, 0, result.removed)
-	})
-
-	t.Run("edge case: absent entry is silently skipped", func(t *testing.T) {
-		t.Parallel()
-		root, dir := makeRoot(t)
-
-		result := removeCommandPaths(batchDeleteBlobCommand{root: root, paths: []string{filepath.Join(dir, "missing")}})
-
-		require.NoError(t, result.errs[0])
-		assert.Equal(t, 0, result.removed)
-	})
-
-	t.Run("happy path: removes existing file", func(t *testing.T) {
-		t.Parallel()
-		root, dir := makeRoot(t)
-		f := filepath.Join(dir, "f")
-		require.NoError(t, os.WriteFile(f, []byte("x"), 0o600))
-
-		result := removeCommandPaths(batchDeleteBlobCommand{root: root, paths: []string{f}})
-
-		require.NoError(t, result.errs[0])
-		assert.Equal(t, 1, result.removed)
-		_, statErr := os.Stat(f)
-		assert.ErrorIs(t, statErr, os.ErrNotExist)
-	})
+				return
+			}
+			require.NoError(t, result.errs[0])
+			assert.Equal(t, tc.wantRemoved, result.removed)
+			for _, name := range tc.wantGone {
+				_, statErr := os.Stat(filepath.Join(dir, name))
+				assert.ErrorIs(t, statErr, os.ErrNotExist)
+			}
+		})
+	}
 }
 
 func TestVacuumManager(t *testing.T) {
