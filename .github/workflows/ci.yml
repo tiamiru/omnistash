@@ -128,7 +128,7 @@ jobs:
           version: 3.x
 
       - name: Build all platforms
-        run: task build:all VERSION="0.0.0-snapshot.${{ github.run_number }}"
+        run: task build:all VERSION="0.0.0-SNAPSHOT.$(git rev-parse --short HEAD)"
 
       - uses: actions/upload-artifact@v7
         with:
