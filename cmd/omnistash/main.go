@@ -18,13 +18,12 @@ import (
 
 const (
 	shutdownTimeout = 30 * time.Second
-	exitUsage       = 2
 )
 
 var (
-	version = "dev"
-	commit  = "none"
-	date    = "unknown"
+	version = "dev"     //nolint:gochecknoglobals
+	commit  = "none"    //nolint:gochecknoglobals
+	date    = "unknown" //nolint:gochecknoglobals
 )
 
 type config struct {
@@ -51,7 +50,7 @@ func main() {
 		if errors.Is(err, flag.ErrHelp) {
 			os.Exit(0)
 		}
-		os.Exit(exitUsage)
+		os.Exit(2) //nolint:mnd
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
