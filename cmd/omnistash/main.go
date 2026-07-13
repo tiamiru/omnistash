@@ -21,7 +21,7 @@ const (
 )
 
 var (
-	version = "dev"     //nolint:gochecknoglobals
+	version = "dev"
 	commit  = "none"    //nolint:gochecknoglobals
 	date    = "unknown" //nolint:gochecknoglobals
 )
