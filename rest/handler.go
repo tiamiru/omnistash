@@ -14,13 +14,13 @@ type RegistryHandler struct {
 	logger *slog.Logger
 }
 
-func NewRegistryHandler(logger *slog.Logger, version string) *RegistryHandler {
+func NewRegistryHandler(logger *slog.Logger, version, commit, date string) *RegistryHandler {
 	if logger == nil {
 		panic("rest.NewRegistryHandler: logger must not be nil")
 	}
 
 	return &RegistryHandler{
-		health: health.NewChecker(version),
+		health: health.NewChecker(version, commit, date),
 		logger: logger,
 	}
 }

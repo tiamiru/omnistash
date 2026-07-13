@@ -21,7 +21,11 @@ const (
 	exitUsage       = 2
 )
 
-var version = "dev"
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
 
 type config struct {
 	addr string
@@ -64,7 +68,7 @@ func run(logger *slog.Logger, cfg config) error {
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(signalChan)
 
-	handler := rest.NewRegistryHandler(logger, version)
+	handler := rest.NewRegistryHandler(logger, version, commit, date)
 	server := rest.NewServer(handler, cfg.addr)
 
 	logger.Info("main: server started", slog.String("addr", server.Addr))
