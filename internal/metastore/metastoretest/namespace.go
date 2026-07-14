@@ -10,10 +10,10 @@ import (
 	"github.com/tiamiru/omnistash/internal/metastore"
 )
 
-func ExerciseTxOpsContract(t *testing.T, newStore MetadataStoreSetupFunc) {
+func ExerciseNamespaceOpsContract(t *testing.T, newStore MetadataStoreSetupFunc) {
 	t.Helper()
 
-	t.Run("TxOps", func(t *testing.T) {
+	t.Run("NamespaceOps", func(t *testing.T) {
 		t.Parallel()
 
 		t.Run("CreateNamespace", func(t *testing.T) {
@@ -25,24 +25,6 @@ func ExerciseTxOpsContract(t *testing.T, newStore MetadataStoreSetupFunc) {
 			t.Parallel()
 			exerciseDeleteNamespace(t, newStore)
 		})
-
-		t.Run("NamespaceExists", func(t *testing.T) {
-			t.Parallel()
-			exerciseNamespaceExists(t, newStore)
-		})
-	})
-}
-
-func exerciseNamespaceExists(t *testing.T, newStore MetadataStoreSetupFunc) {
-	t.Helper()
-
-	t.Run("returns false when namespace does not exist", func(t *testing.T) {
-		t.Parallel()
-		store := newStore(t)
-
-		exists, err := store.NamespaceExists(t.Context(), DefaultName)
-		require.NoError(t, err)
-		assert.False(t, exists)
 	})
 }
 
@@ -86,21 +68,6 @@ func exerciseCreateNamespace(t *testing.T, newStore MetadataStoreSetupFunc) {
 		})
 
 		assert.False(t, created)
-	})
-
-	t.Run("edge case: does not affect a different namespace", func(t *testing.T) {
-		t.Parallel()
-		store := newStore(t)
-
-		mustAtomic(t, store, func(ctx context.Context, tx metastore.TxOps) error {
-			_, err := tx.CreateNamespace(ctx, DefaultName)
-
-			return err
-		})
-
-		exists, err := store.NamespaceExists(t.Context(), OtherName)
-		require.NoError(t, err)
-		assert.False(t, exists)
 	})
 }
 

@@ -11,6 +11,16 @@ import (
 	"github.com/tiamiru/omnistash/internal/metastore"
 )
 
+const (
+	storeTag   = "SQLiteMetadataStore"
+	packageTag = "sqlite"
+)
+
+var (
+	_ metastore.MetadataStore = &SQLiteMetadataStore{}
+	_ metastore.TxOps         = &sqliteTx{}
+)
+
 type SQLiteMetadataStore struct {
 	writeDB *sql.DB
 	readDB  *sql.DB
@@ -23,23 +33,23 @@ type sqliteTx struct {
 func NewSQLiteMetadataStore(ctx context.Context, dsn string) (*SQLiteMetadataStore, error) {
 	writeDB, err := sql.Open("sqlite", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("sqlite.New: open write db: %w", err)
+		return nil, fmt.Errorf("%s.New: open write db: %w", packageTag, err)
 	}
 	writeDB.SetMaxOpenConns(1)
 
 	_, err = writeDB.ExecContext(ctx, "PRAGMA journal_mode=WAL")
 	if err != nil {
-		return nil, fmt.Errorf("sqlite.New: enable WAL: %w", err)
+		return nil, fmt.Errorf("%s.New: enable WAL: %w", packageTag, err)
 	}
 
 	_, err = writeDB.ExecContext(ctx, "PRAGMA foreign_keys=ON")
 	if err != nil {
-		return nil, fmt.Errorf("sqlite.New: enable foreign keys: %w", err)
+		return nil, fmt.Errorf("%s.New: enable foreign keys: %w", packageTag, err)
 	}
 
 	readDB, err := sql.Open("sqlite", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("sqlite.New: open read db: %w", err)
+		return nil, fmt.Errorf("%s.New: open read db: %w", packageTag, err)
 	}
 
 	return &SQLiteMetadataStore{writeDB: writeDB, readDB: readDB}, nil
@@ -50,7 +60,7 @@ func (s *SQLiteMetadataStore) Close() error {
 	readErr := s.readDB.Close()
 
 	if writeErr != nil || readErr != nil {
-		return fmt.Errorf("%w: write=%w read=%w", metastore.ErrMetastoreClose, writeErr, readErr)
+		return fmt.Errorf("%w: %w", metastore.ErrMetastoreClose, errors.Join(writeErr, readErr))
 	}
 
 	return nil
@@ -62,22 +72,23 @@ func (s *SQLiteMetadataStore) Atomic(
 ) (err error) {
 	sqlTx, err := s.writeDB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
-		return fmt.Errorf("sqlite.Atomic: begin: %w", err)
+		return fmt.Errorf("%s.Atomic: begin: %w", storeTag, err)
 	}
 
 	committed := false
 	defer func() {
-		if p := recover(); p != nil {
+		p := recover()
+		if p != nil {
 			rollbackErr := sqlTx.Rollback()
 			if rollbackErr != nil {
-				panic(fmt.Errorf("sqlite.Atomic: rollback after panic: %w; original: %v", rollbackErr, p))
+				panic(fmt.Errorf("%s.Atomic: rollback after panic: original=%v: %w", storeTag, p, rollbackErr))
 			}
 			panic(p)
 		}
 		if !committed {
 			rollbackErr := sqlTx.Rollback()
 			if rollbackErr != nil {
-				err = errors.Join(err, fmt.Errorf("sqlite.Atomic: rollback: %w", rollbackErr))
+				err = errors.Join(err, fmt.Errorf("%s.Atomic: rollback: %w", storeTag, rollbackErr))
 			}
 		}
 	}()
@@ -90,7 +101,7 @@ func (s *SQLiteMetadataStore) Atomic(
 
 	err = sqlTx.Commit()
 	if err != nil {
-		return fmt.Errorf("sqlite.Atomic: commit: %w", err)
+		return fmt.Errorf("%s.Atomic: commit: %w", storeTag, err)
 	}
 
 	committed = true

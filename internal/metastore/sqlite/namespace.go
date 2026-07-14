@@ -9,7 +9,7 @@ func (s *SQLiteMetadataStore) NamespaceExists(ctx context.Context, name string) 
 	var found bool
 	err := s.readDB.QueryRowContext(ctx, sqlNamespaceExists, name).Scan(&found)
 	if err != nil {
-		return false, fmt.Errorf("NamespaceExists: %w", err)
+		return false, fmt.Errorf("%s.NamespaceExists: %w", storeTag, err)
 	}
 
 	return found, nil

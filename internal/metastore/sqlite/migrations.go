@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS namespace (
 func ApplyMigrations(ctx context.Context, s *SQLiteMetadataStore) error {
 	_, err := s.writeDB.ExecContext(ctx, schema)
 	if err != nil {
-		return fmt.Errorf("ApplyMigrations: exec schema: %w", err)
+		return fmt.Errorf("%s.ApplyMigrations: exec schema: %w", packageTag, err)
 	}
 
 	return nil
@@ -31,7 +31,7 @@ func ApplyMigrations(ctx context.Context, s *SQLiteMetadataStore) error {
 func CheckMigrations(ctx context.Context, s *SQLiteMetadataStore) error {
 	rows, err := s.writeDB.QueryContext(ctx, "SELECT name FROM sqlite_master WHERE type='table'")
 	if err != nil {
-		return fmt.Errorf("CheckMigrations: query tables: %w", err)
+		return fmt.Errorf("%s.CheckMigrations: query tables: %w", packageTag, err)
 	}
 	defer rows.Close() //nolint:errcheck
 
@@ -40,13 +40,13 @@ func CheckMigrations(ctx context.Context, s *SQLiteMetadataStore) error {
 		var name string
 		err = rows.Scan(&name)
 		if err != nil {
-			return fmt.Errorf("CheckMigrations: scan: %w", err)
+			return fmt.Errorf("%s.CheckMigrations: scan: %w", packageTag, err)
 		}
 		existing[name] = true
 	}
 	err = rows.Err()
 	if err != nil {
-		return fmt.Errorf("CheckMigrations: rows: %w", err)
+		return fmt.Errorf("%s.CheckMigrations: rows: %w", packageTag, err)
 	}
 
 	var missing []string
@@ -56,7 +56,7 @@ func CheckMigrations(ctx context.Context, s *SQLiteMetadataStore) error {
 		}
 	}
 	if len(missing) > 0 {
-		return fmt.Errorf("CheckMigrations: %w: [%s]", metastore.ErrMissingTables, strings.Join(missing, ", "))
+		return fmt.Errorf("%s.CheckMigrations: %w: [%s]", packageTag, metastore.ErrMissingTables, strings.Join(missing, ", "))
 	}
 
 	return nil
