@@ -56,7 +56,12 @@ func CheckMigrations(ctx context.Context, s *SQLiteMetadataStore) error {
 		}
 	}
 	if len(missing) > 0 {
-		return fmt.Errorf("%s.CheckMigrations: %w: [%s]", packageTag, metastore.ErrMissingTables, strings.Join(missing, ", "))
+		return fmt.Errorf(
+			"%s.CheckMigrations: %w: [%s]",
+			packageTag,
+			metastore.ErrMissingTables,
+			strings.Join(missing, ", "),
+		)
 	}
 
 	return nil
