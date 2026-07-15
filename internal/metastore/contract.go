@@ -3,23 +3,36 @@ package metastore
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 var (
 	ErrMissingTables  = errors.New("missing tables")
 	ErrMetastoreClose = errors.New("metastore close")
+	ErrNameExists     = errors.New("namespace already exists")
+	ErrNameUnknown    = errors.New("namespace unknown")
 )
+
+// NamespaceRow is the metastore representation of a namespace row.
+type NamespaceRow struct {
+	Name      string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
 
 // NamespaceOps scopes blobs to a repository name.
 //
 //nolint:iface
 type NamespaceOps interface {
-	// CreateNamespace creates name if it does not exist. Returns (true, nil) when created,
-	// (false, nil) when it already existed.
-	CreateNamespace(ctx context.Context, name string) (created bool, err error)
+	// CreateNamespace creates name if it does not exist.
+	//
+	// If the namespace already exists, returns ErrNameExists.
+	CreateNamespace(ctx context.Context, name string) (NamespaceRow, error)
 
-	// DeleteNamespace removes name. Returns (true, nil) when deleted, (false, nil) when not found.
-	DeleteNamespace(ctx context.Context, name string) (deleted bool, err error)
+	// DeleteNamespace removes name and returns the deleted row.
+	//
+	// If the namespace does not exist, returns ErrNameUnknown.
+	DeleteNamespace(ctx context.Context, name string) (NamespaceRow, error)
 }
 
 // TxOps is the full set of operations available inside an Atomic transaction.

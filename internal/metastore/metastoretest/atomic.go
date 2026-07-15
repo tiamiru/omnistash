@@ -20,20 +20,6 @@ func ExerciseAtomicContract(t *testing.T, newStore MetadataStoreSetupFunc) {
 	t.Run("Atomic", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("happy path: commits writes when fn returns nil", func(t *testing.T) {
-			t.Parallel()
-			store := newStore(t)
-			mustAtomic(t, store, func(ctx context.Context, tx metastore.TxOps) error {
-				_, err := tx.CreateNamespace(ctx, DefaultName)
-
-				return err
-			})
-
-			exists, err := store.NamespaceExists(t.Context(), DefaultName)
-			require.NoError(t, err)
-			assert.True(t, exists)
-		})
-
 		t.Run("error path: rolls back all writes when fn returns an error", func(t *testing.T) {
 			t.Parallel()
 			store := newStore(t)
@@ -62,6 +48,20 @@ func ExerciseAtomicContract(t *testing.T, newStore MetadataStoreSetupFunc) {
 			t.Parallel()
 			exerciseAtomicSerialization(t, newStore)
 		})
+
+		t.Run("happy path: commits writes when fn returns nil", func(t *testing.T) {
+			t.Parallel()
+			store := newStore(t)
+			mustAtomic(t, store, func(ctx context.Context, tx metastore.TxOps) error {
+				_, err := tx.CreateNamespace(ctx, DefaultName)
+
+				return err
+			})
+
+			exists, err := store.NamespaceExists(t.Context(), DefaultName)
+			require.NoError(t, err)
+			assert.True(t, exists)
+		})
 	})
 }
 
@@ -71,7 +71,6 @@ func exerciseAtomicSerialization(t *testing.T, newStore MetadataStoreSetupFunc) 
 
 	const workers = 5
 	errs := make([]error, workers)
-	created := make([]bool, workers)
 
 	var wg sync.WaitGroup
 	wg.Add(workers)
@@ -80,30 +79,24 @@ func exerciseAtomicSerialization(t *testing.T, newStore MetadataStoreSetupFunc) 
 		go func(i int) {
 			defer wg.Done()
 			errs[i] = store.Atomic(t.Context(), func(ctx context.Context, tx metastore.TxOps) error {
-				wasCreated, err := tx.CreateNamespace(ctx, DefaultName)
-				if err != nil {
-					return err
-				}
-				created[i] = wasCreated
+				_, err := tx.CreateNamespace(ctx, DefaultName)
 
-				return nil
+				return err
 			})
 		}(i)
 	}
 
 	wg.Wait()
 
-	for i, err := range errs {
-		require.NoError(t, err, "worker %d", i)
-	}
-
-	n := 0
-	for _, c := range created {
-		if c {
-			n++
+	created := 0
+	for _, err := range errs {
+		if err == nil {
+			created++
+		} else {
+			require.ErrorIs(t, err, metastore.ErrNameExists)
 		}
 	}
-	assert.Equal(t, 1, n, "exactly one transaction should have created the namespace")
+	assert.Equal(t, 1, created, "exactly one transaction should have created the namespace")
 }
 
 func exerciseAtomicPanic(t *testing.T, newStore MetadataStoreSetupFunc) {

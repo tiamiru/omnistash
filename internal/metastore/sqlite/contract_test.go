@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/tiamiru/omnistash/internal/metastore"
 	"github.com/tiamiru/omnistash/internal/metastore/metastoretest"
 )
@@ -15,26 +17,18 @@ func newContractTestStore(t *testing.T) metastore.MetadataStore { //nolint:iretu
 	dbPath := filepath.Join(t.TempDir(), "meta.db")
 
 	store, err := NewSQLiteMetadataStore(context.Background(), dbPath)
-	if err != nil {
-		t.Fatalf("sqlite.New: %v", err)
-	}
+	require.NoError(t, err)
 
 	t.Cleanup(func() {
 		closeErr := store.Close()
-		if closeErr != nil {
-			t.Errorf("store.Close: %v", closeErr)
-		}
+		require.NoError(t, closeErr)
 	})
 
 	err = ApplyMigrations(context.Background(), store)
-	if err != nil {
-		t.Fatalf("ApplyMigrations: %v", err)
-	}
+	require.NoError(t, err)
 
 	err = CheckMigrations(context.Background(), store)
-	if err != nil {
-		t.Fatalf("CheckMigrations: %v", err)
-	}
+	require.NoError(t, err)
 
 	return store
 }
