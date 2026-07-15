@@ -10,7 +10,7 @@ const readHeaderTimeout = 10 * time.Second
 // NewServer returns an *http.Server with all registered routes.
 func NewServer(h *RegistryHandler, addr string) *http.Server {
 	if h == nil {
-		panic("server.NewServer: h must not be nil")
+		panic("NewServer: h must not be nil")
 	}
 
 	mux := http.NewServeMux()

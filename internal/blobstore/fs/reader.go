@@ -15,7 +15,7 @@ import (
 func (s *FilesystemBlobStore) GetBlob(d digest.Digest) (io.ReadCloser, int64, error) {
 	err := blobstore.ValidateDigest(d)
 	if err != nil {
-		return nil, 0, fmt.Errorf("get blob %s: %w", d, err)
+		return nil, 0, fmt.Errorf("GetBlob: digest=%s: %w", d, err)
 	}
 
 	p := buildBlobPath(s.prefix, string(s.partition), d)
@@ -25,15 +25,15 @@ func (s *FilesystemBlobStore) GetBlob(d digest.Digest) (io.ReadCloser, int64, er
 			return nil, 0, fmt.Errorf("%w: digest=%s", blobstore.ErrBlobUnknown, d)
 		}
 
-		return nil, 0, fmt.Errorf("get blob %s: open: %w", d, err)
+		return nil, 0, fmt.Errorf("GetBlob: digest=%s: open: %w", d, err)
 	}
 
 	fi, err := f.Stat()
 	if err != nil {
-		statErr := fmt.Errorf("get blob %s: stat: %w", d, err)
+		statErr := fmt.Errorf("GetBlob: digest=%s: stat: %w", d, err)
 		closeErr := f.Close()
 		if closeErr != nil {
-			return nil, 0, errors.Join(statErr, fmt.Errorf("get blob %s: close: %w", d, closeErr))
+			return nil, 0, errors.Join(statErr, fmt.Errorf("GetBlob: close: %w", closeErr))
 		}
 
 		return nil, 0, statErr
@@ -45,7 +45,7 @@ func (s *FilesystemBlobStore) GetBlob(d digest.Digest) (io.ReadCloser, int64, er
 func (s *FilesystemBlobStore) GetBlobRange(d digest.Digest, first, last int64, w io.Writer) (err error) {
 	err = blobstore.ValidateDigest(d)
 	if err != nil {
-		return fmt.Errorf("get blob range %s: %w", d, err)
+		return fmt.Errorf("GetBlobRange: digest=%s: %w", d, err)
 	}
 
 	if first < 0 || last < first {
@@ -59,19 +59,19 @@ func (s *FilesystemBlobStore) GetBlobRange(d digest.Digest, first, last int64, w
 			return fmt.Errorf("%w: digest=%s", blobstore.ErrBlobUnknown, d)
 		}
 
-		return fmt.Errorf("get blob range %s: open: %w", d, err)
+		return fmt.Errorf("GetBlobRange: digest=%s: open: %w", d, err)
 	}
 
 	defer func() {
 		closeErr := f.Close()
-		if closeErr != nil && err != nil {
-			err = errors.Join(err, fmt.Errorf("get blob range %s: close: %w", d, closeErr))
+		if closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("GetBlobRange: close: %w", closeErr))
 		}
 	}()
 
 	fi, err := f.Stat()
 	if err != nil {
-		return fmt.Errorf("get blob range %s: stat: %w", d, err)
+		return fmt.Errorf("GetBlobRange: digest=%s: stat: %w", d, err)
 	}
 
 	if last >= fi.Size() {
@@ -80,12 +80,12 @@ func (s *FilesystemBlobStore) GetBlobRange(d digest.Digest, first, last int64, w
 
 	_, err = f.Seek(first, io.SeekStart)
 	if err != nil {
-		return fmt.Errorf("get blob range %s: seek: %w", d, err)
+		return fmt.Errorf("GetBlobRange: digest=%s: seek: %w", d, err)
 	}
 
 	_, err = io.CopyN(w, f, last-first+1)
 	if err != nil {
-		return fmt.Errorf("get blob range %s: copy: %w", d, err)
+		return fmt.Errorf("GetBlobRange: digest=%s: copy: %w", d, err)
 	}
 
 	return nil

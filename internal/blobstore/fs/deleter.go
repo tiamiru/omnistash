@@ -25,12 +25,12 @@ func (s *FilesystemBlobStore) StopVacuumProcess() error {
 func (s *FilesystemBlobStore) DeleteBlob(ctx context.Context, d digest.Digest) error {
 	err := ctx.Err()
 	if err != nil {
-		return fmt.Errorf("delete blob: %w", err)
+		return fmt.Errorf("DeleteBlob: digest=%s: %w", d, err)
 	}
 
 	err = blobs.ValidateDigest(d)
 	if err != nil {
-		return fmt.Errorf("delete blob %s: %w", d, err)
+		return fmt.Errorf("DeleteBlob: digest=%s: %w", d, err)
 	}
 
 	dir := filepath.Join(s.prefix, string(s.partition))
@@ -38,11 +38,11 @@ func (s *FilesystemBlobStore) DeleteBlob(ctx context.Context, d digest.Digest) e
 
 	removed, pathErrs, removeErr := s.vacuumManager.removeBatch(ctx, dir, []string{p})
 	if removeErr != nil {
-		return fmt.Errorf("delete blob %s: %w", d, removeErr)
+		return fmt.Errorf("DeleteBlob: digest=%s: %w", d, removeErr)
 	}
 	pathErr := errors.Join(pathErrs...)
 	if pathErr != nil {
-		return fmt.Errorf("delete blob %s: %w", d, pathErr)
+		return fmt.Errorf("DeleteBlob: digest=%s: %w", d, pathErr)
 	}
 	if removed == 0 {
 		return fmt.Errorf("%w: digest=%s", blobs.ErrBlobUnknown, d)
@@ -54,7 +54,7 @@ func (s *FilesystemBlobStore) DeleteBlob(ctx context.Context, d digest.Digest) e
 func (s *FilesystemBlobStore) BatchDeleteBlobs(ctx context.Context, digests []digest.Digest) error {
 	err := ctx.Err()
 	if err != nil {
-		return fmt.Errorf("batch delete blobs: %w", err)
+		return fmt.Errorf("BatchDeleteBlobs: %w", err)
 	}
 
 	dir := filepath.Join(s.prefix, string(s.partition))

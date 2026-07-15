@@ -52,28 +52,28 @@ func NewFilesystemBlobStore(prefix string, partition blobstore.PartitionKey, opt
 func (s *FilesystemBlobStore) PutBlob(d digest.Digest, size int64, r io.Reader) (int64, error) {
 	err := blobstore.ValidateDigest(d)
 	if err != nil {
-		return 0, fmt.Errorf("put blob %s: %w", d, err)
+		return 0, fmt.Errorf("PutBlob: digest=%s: %w", d, err)
 	}
 
 	if size < 0 {
-		return 0, fmt.Errorf("put blob %s: %w: got %d", d, blobstore.ErrSizeInvalid, size)
+		return 0, fmt.Errorf("%w: size=%d", blobstore.ErrSizeInvalid, size)
 	}
 
 	tmpPath, n, err := s.writeBlobToStaging(d, size, r)
 	if err != nil {
-		return 0, fmt.Errorf("put blob %s: %w", d, err)
+		return 0, fmt.Errorf("PutBlob: digest=%s: %w", d, err)
 	}
 
 	defer func() {
 		removeErr := removeFileIfExists(tmpPath)
 		if removeErr != nil {
-			s.logger.Warn("PutBlob: failed to remove staged file", logtag.Path(tmpPath), logtag.Err(removeErr))
+			s.logger.Warn("PutBlob: remove staged file", logtag.Path(tmpPath), logtag.Err(removeErr))
 		}
 	}()
 
 	err = s.linkStagedFile(tmpPath, d)
 	if err != nil {
-		return 0, fmt.Errorf("put blob %s: %w", d, err)
+		return 0, fmt.Errorf("PutBlob: digest=%s: %w", d, err)
 	}
 
 	return n, nil
@@ -82,7 +82,7 @@ func (s *FilesystemBlobStore) PutBlob(d digest.Digest, size int64, r io.Reader) 
 func (s *FilesystemBlobStore) StatBlob(d digest.Digest) (int64, error) {
 	err := blobstore.ValidateDigest(d)
 	if err != nil {
-		return 0, fmt.Errorf("stat blob %s: %w", d, err)
+		return 0, fmt.Errorf("StatBlob: digest=%s: %w", d, err)
 	}
 
 	p := buildBlobPath(s.prefix, string(s.partition), d)
@@ -92,7 +92,7 @@ func (s *FilesystemBlobStore) StatBlob(d digest.Digest) (int64, error) {
 			return 0, fmt.Errorf("%w: digest=%s", blobstore.ErrBlobUnknown, d)
 		}
 
-		return 0, fmt.Errorf("stat blob %s: stat: %w", d, err)
+		return 0, fmt.Errorf("StatBlob: digest=%s: stat: %w", d, err)
 	}
 
 	return fi.Size(), nil
@@ -112,7 +112,7 @@ func (s *FilesystemBlobStore) writeBlobToStaging(d digest.Digest, size int64, r 
 	if n != size {
 		removeErr := removeFileIfExists(tmpPath)
 		if removeErr != nil {
-			s.logger.Warn("PutBlob: failed to remove staged file", logtag.Path(tmpPath), logtag.Err(removeErr))
+			s.logger.Warn("writeBlobToStaging: remove staged file", logtag.Path(tmpPath), logtag.Err(removeErr))
 		}
 
 		return "", 0, fmt.Errorf("%w: got %d, want %d", blobstore.ErrSizeInvalid, n, size)
@@ -123,7 +123,7 @@ func (s *FilesystemBlobStore) writeBlobToStaging(d digest.Digest, size int64, r 
 	if err != nil {
 		removeErr := removeFileIfExists(tmpPath)
 		if removeErr != nil {
-			s.logger.Warn("PutBlob: failed to remove staged file", logtag.Path(tmpPath), logtag.Err(removeErr))
+			s.logger.Warn("writeBlobToStaging: remove staged file", logtag.Path(tmpPath), logtag.Err(removeErr))
 		}
 
 		return "", 0, err
@@ -157,7 +157,7 @@ func (s *FilesystemBlobStore) writeToStaging(r io.Reader) (_ string, _ int64, er
 		if err != nil {
 			removeErr := removeFileIfExists(tmpPath)
 			if removeErr != nil {
-				s.logger.Warn("PutBlob: failed to remove staged file", logtag.Path(tmpPath), logtag.Err(removeErr))
+				s.logger.Warn("writeToStaging: remove staged file", logtag.Path(tmpPath), logtag.Err(removeErr))
 			}
 		}
 	}()
