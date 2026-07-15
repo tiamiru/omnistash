@@ -6,9 +6,15 @@ omnistash is a registry for cataloging and distributing artifacts. This registry
 
 Run migrations before starting the server for the first time, or after upgrading.
 
+Download the latest `omnistash-migrate` binary from the [releases page](../../releases) and run:
+
 ```bash
-go run ./cmd/migrate -dsn omnistash.db
+omnistash-migrate -dsn omnistash.db
 ```
+
+| Flag | Default | Description |
+|---|---|---|
+| `-dsn` | | SQLite database path (required) |
 
 ## Run the server
 

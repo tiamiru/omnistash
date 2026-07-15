@@ -60,7 +60,7 @@ tasks:
       - go build -trimpath -ldflags "-s -w -X main.version={{.VERSION}} -X main.commit={{.COMMIT}} -X main.date={{.DATE}}" -o {{.BINARY}} ./cmd/omnistash
 
   build:all:
-    desc: Cross-compile omnistash for all platforms to dist/
+    desc: Cross-compile omnistash binary for all platforms to dist/
     cmds:
       - mkdir -p dist
       - |
