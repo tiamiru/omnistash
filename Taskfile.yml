@@ -3,8 +3,6 @@
 version: '3'
 
 vars:
-  BINARY: '{{.ROOT_DIR}}/dist/omnistash'
-  MIGRATE_BINARY: '{{.ROOT_DIR}}/dist/omnistash-migrate'
   BUILD_TARGETS: "linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64"
   VERSION:
     sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
@@ -55,51 +53,47 @@ tasks:
       - echo "Coverage report @ {{.ROOT_DIR}}/.coverage/coverage.html"
 
   build:
-    desc: Build the omnistash registry binary to bin/omnistash
+    desc: Build omnistash for a specific platform (requires GOOS and GOARCH)
+    requires:
+      vars: [GOOS, GOARCH]
+    vars:
+      EXT: '{{if eq .GOOS "windows"}}.exe{{end}}'
     cmds:
-      - go build -trimpath -ldflags "-s -w -X main.version={{.VERSION}} -X main.commit={{.COMMIT}} -X main.date={{.DATE}}" -o {{.BINARY}} ./cmd/omnistash
+      - mkdir -p dist
+      - |
+        GOOS={{.GOOS}} GOARCH={{.GOARCH}} go build -trimpath \
+          -ldflags "-s -w -X main.version={{.VERSION}} -X main.commit={{.COMMIT}} -X main.date={{.DATE}}" \
+          -o dist/omnistash_{{.GOOS}}_{{.GOARCH}}{{.EXT}} ./cmd/omnistash
+      - echo "done -> dist/omnistash_{{.GOOS}}_{{.GOARCH}}{{.EXT}}"
 
   build:all:
     desc: Cross-compile omnistash binary for all platforms to dist/
     cmds:
-      - mkdir -p dist
       - |
         for target in {{.BUILD_TARGETS}}; do
-          GOOS=${target%/*}
-          GOARCH=${target#*/}
-          case $GOOS in
-            windows) EXT=".exe" ;;
-            *)       EXT=""     ;;
-          esac
-          echo "building $GOOS/$GOARCH..."
-          GOOS=$GOOS GOARCH=$GOARCH go build -trimpath \
-            -ldflags "-s -w -X main.version={{.VERSION}} -X main.commit={{.COMMIT}} -X main.date={{.DATE}}" \
-            -o dist/omnistash_${GOOS}_${GOARCH}${EXT} ./cmd/omnistash
-          echo "done -> dist/omnistash_${GOOS}_${GOARCH}${EXT}"
+          task build GOOS=${target%/*} GOARCH=${target#*/}
         done
-      - cd dist && sha256sum omnistash_* > checksums.txt
+      - cd dist && sha256sum omnistash_* > omnistash_checksum.txt
 
   build:migrate:
-    desc: Build the omnistash-migrate binary to dist/omnistash-migrate
+    desc: Build omnistash-migrate for a specific platform (requires GOOS and GOARCH)
+    requires:
+      vars: [GOOS, GOARCH]
+    vars:
+      EXT: '{{if eq .GOOS "windows"}}.exe{{end}}'
     cmds:
-      - go build -trimpath -ldflags "-s -w -X main.version={{.VERSION}} -X main.commit={{.COMMIT}} -X main.date={{.DATE}}" -o {{.MIGRATE_BINARY}} ./cmd/migrate
+      - mkdir -p dist
+      - |
+        GOOS={{.GOOS}} GOARCH={{.GOARCH}} go build -trimpath \
+          -ldflags "-s -w -X main.version={{.VERSION}} -X main.commit={{.COMMIT}} -X main.date={{.DATE}}" \
+          -o dist/omnistash-migrate_{{.GOOS}}_{{.GOARCH}}{{.EXT}} ./cmd/migrate
+      - echo "done -> dist/omnistash-migrate_{{.GOOS}}_{{.GOARCH}}{{.EXT}}"
 
   build:migrate:all:
     desc: Cross-compile omnistash-migrate for all platforms to dist/
     cmds:
-      - mkdir -p dist
       - |
         for target in {{.BUILD_TARGETS}}; do
-          GOOS=${target%/*}
-          GOARCH=${target#*/}
-          case $GOOS in
-            windows) EXT=".exe" ;;
-            *)       EXT=""     ;;
-          esac
-          echo "building $GOOS/$GOARCH..."
-          GOOS=$GOOS GOARCH=$GOARCH go build -trimpath \
-            -ldflags "-s -w -X main.version={{.VERSION}} -X main.commit={{.COMMIT}} -X main.date={{.DATE}}" \
-            -o dist/omnistash-migrate_${GOOS}_${GOARCH}${EXT} ./cmd/migrate
-          echo "done -> dist/omnistash-migrate_${GOOS}_${GOARCH}${EXT}"
+          task build:migrate GOOS=${target%/*} GOARCH=${target#*/}
         done
-      - cd dist && sha256sum omnistash-migrate_* > omnistash-migrate-checksums.txt
+      - cd dist && sha256sum omnistash-migrate_* > omnistash-migrate_checksum.txt
