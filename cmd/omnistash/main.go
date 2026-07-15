@@ -80,11 +80,6 @@ func run(logger *slog.Logger, cfg config) error {
 		}
 	}()
 
-	err = sqlite.ApplyMigrations(ctx, meta)
-	if err != nil {
-		return fmt.Errorf("migrate metastore: %w", err)
-	}
-
 	ns := namespace.NewService(meta)
 
 	signalChan := make(chan os.Signal, 1)

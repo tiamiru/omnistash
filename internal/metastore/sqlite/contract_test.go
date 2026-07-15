@@ -9,12 +9,16 @@ import (
 
 	"github.com/tiamiru/omnistash/internal/metastore"
 	"github.com/tiamiru/omnistash/internal/metastore/metastoretest"
+	"github.com/tiamiru/omnistash/migration"
 )
 
 func newContractTestStore(t *testing.T) metastore.MetadataStore { //nolint:ireturn
 	t.Helper()
 
 	dbPath := filepath.Join(t.TempDir(), "meta.db")
+
+	err := migration.ApplySQLiteMigrations(context.Background(), dbPath)
+	require.NoError(t, err)
 
 	store, err := NewSQLiteMetadataStore(context.Background(), dbPath)
 	require.NoError(t, err)
@@ -23,12 +27,6 @@ func newContractTestStore(t *testing.T) metastore.MetadataStore { //nolint:iretu
 		closeErr := store.Close()
 		require.NoError(t, closeErr)
 	})
-
-	err = ApplyMigrations(context.Background(), store)
-	require.NoError(t, err)
-
-	err = CheckMigrations(context.Background(), store)
-	require.NoError(t, err)
 
 	return store
 }

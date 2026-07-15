@@ -7,7 +7,6 @@ import (
 )
 
 var (
-	ErrMissingTables  = errors.New("missing tables")
 	ErrMetastoreClose = errors.New("metastore close")
 	ErrNameExists     = errors.New("namespace already exists")
 	ErrNameUnknown    = errors.New("namespace unknown")
