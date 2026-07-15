@@ -134,7 +134,7 @@ func (s *FilesystemBlobStore) VacuumStagingBlobs(
 ) error {
 	err := ctx.Err()
 	if err != nil {
-		return fmt.Errorf("vacuum staging blobs: %w", err)
+		return fmt.Errorf("VacuumStagingBlobs: %w", err)
 	}
 
 	stagingDir := filepath.Join(s.prefix, string(s.partition), ".staging")
@@ -154,7 +154,7 @@ func (s *FilesystemBlobStore) VacuumStagingBlobs(
 	}
 
 	if walkErr != nil && !errors.Is(walkErr, iofs.ErrNotExist) {
-		errs = append(errs, fmt.Errorf("vacuum staging blobs: walk: %w", walkErr))
+		errs = append(errs, fmt.Errorf("VacuumStagingBlobs: walk: %w", walkErr))
 	}
 
 	return errors.Join(errs...)
@@ -173,7 +173,7 @@ func findStaleStagingEntries(
 			if path == dir {
 				return err
 			}
-			statErrs = append(statErrs, fmt.Errorf("vacuum staging blobs: walk %s: %w", path, err))
+			statErrs = append(statErrs, fmt.Errorf("walk %s: %w", path, err))
 
 			return nil
 		}
@@ -188,7 +188,7 @@ func findStaleStagingEntries(
 
 		info, infoErr := d.Info()
 		if infoErr != nil {
-			statErrs = append(statErrs, fmt.Errorf("vacuum staging blobs: stat %s: %w", path, infoErr))
+			statErrs = append(statErrs, fmt.Errorf("stat %s: %w", path, infoErr))
 
 			return nil
 		}

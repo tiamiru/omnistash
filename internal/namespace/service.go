@@ -9,8 +9,6 @@ import (
 	"github.com/tiamiru/omnistash/internal/metastore"
 )
 
-const serviceTag = "Service"
-
 // Namespace is the domain representation of a namespace.
 type Namespace struct {
 	Name      string
@@ -29,7 +27,7 @@ func NewService(meta metastore.MetadataStore) *Service {
 func (s *Service) CreateNamespace(ctx context.Context, name string) (Namespace, error) {
 	err := validateName(name)
 	if err != nil {
-		return Namespace{}, fmt.Errorf("%s.CreateNamespace: %w", serviceTag, err)
+		return Namespace{}, fmt.Errorf("CreateNamespace: name=%s: %w", name, err)
 	}
 
 	var ns Namespace
@@ -49,7 +47,7 @@ func (s *Service) CreateNamespace(ctx context.Context, name string) (Namespace, 
 	})
 
 	if err != nil {
-		return Namespace{}, fmt.Errorf("%s.CreateNamespace: %w", serviceTag, err)
+		return Namespace{}, fmt.Errorf("CreateNamespace: name=%s: %w", name, err)
 	}
 
 	return ns, nil
@@ -58,7 +56,7 @@ func (s *Service) CreateNamespace(ctx context.Context, name string) (Namespace, 
 func (s *Service) DeleteNamespace(ctx context.Context, name string) (Namespace, error) {
 	err := validateName(name)
 	if err != nil {
-		return Namespace{}, fmt.Errorf("%s.DeleteNamespace: %w", serviceTag, err)
+		return Namespace{}, fmt.Errorf("DeleteNamespace: name=%s: %w", name, err)
 	}
 
 	var ns Namespace
@@ -77,7 +75,7 @@ func (s *Service) DeleteNamespace(ctx context.Context, name string) (Namespace, 
 		return nil
 	})
 	if err != nil {
-		return Namespace{}, fmt.Errorf("%s.DeleteNamespace: %w", serviceTag, err)
+		return Namespace{}, fmt.Errorf("DeleteNamespace: name=%s: %w", name, err)
 	}
 
 	return ns, nil

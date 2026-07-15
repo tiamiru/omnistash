@@ -19,7 +19,7 @@ type RegistryHandler struct {
 
 func NewRegistryHandler(logger *slog.Logger, ns NamespaceService, version, commit, date string) *RegistryHandler {
 	if logger == nil {
-		panic("rest.NewRegistryHandler: logger must not be nil")
+		panic("NewRegistryHandler: logger must not be nil")
 	}
 
 	return &RegistryHandler{
