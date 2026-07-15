@@ -15,7 +15,9 @@ var requiredTables = [1]string{
 
 const schema = `
 CREATE TABLE IF NOT EXISTS namespace (
-    name  TEXT PRIMARY KEY
+    name        TEXT    PRIMARY KEY,
+    created_at  INTEGER NOT NULL DEFAULT (unixepoch()),
+    updated_at  INTEGER NOT NULL DEFAULT (unixepoch())
 );
 `
 
@@ -57,7 +59,7 @@ func CheckMigrations(ctx context.Context, s *SQLiteMetadataStore) error {
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf(
-			"%s.CheckMigrations: %w: [%s]",
+			"%s.CheckMigrations: %w: missing=[%s]",
 			packageTag,
 			metastore.ErrMissingTables,
 			strings.Join(missing, ", "),

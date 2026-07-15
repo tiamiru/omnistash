@@ -31,25 +31,7 @@ func ExerciseNamespaceOpsContract(t *testing.T, newStore MetadataStoreSetupFunc)
 func exerciseCreateNamespace(t *testing.T, newStore MetadataStoreSetupFunc) {
 	t.Helper()
 
-	t.Run("happy path: returns created=true on first call", func(t *testing.T) {
-		t.Parallel()
-		store := newStore(t)
-
-		var created bool
-		mustAtomic(t, store, func(ctx context.Context, tx metastore.TxOps) error {
-			var err error
-			created, err = tx.CreateNamespace(ctx, DefaultName)
-
-			return err
-		})
-
-		assert.True(t, created)
-		exists, err := store.NamespaceExists(t.Context(), DefaultName)
-		require.NoError(t, err)
-		assert.True(t, exists)
-	})
-
-	t.Run("edge case: returns created=false when namespace already exists", func(t *testing.T) {
+	t.Run("edge case: returns ErrNameExists when namespace already exists", func(t *testing.T) {
 		t.Parallel()
 		store := newStore(t)
 
@@ -59,22 +41,54 @@ func exerciseCreateNamespace(t *testing.T, newStore MetadataStoreSetupFunc) {
 			return err
 		})
 
-		var created bool
-		mustAtomic(t, store, func(ctx context.Context, tx metastore.TxOps) error {
-			var err error
-			created, err = tx.CreateNamespace(ctx, DefaultName)
+		err := store.Atomic(t.Context(), func(ctx context.Context, tx metastore.TxOps) error {
+			_, err := tx.CreateNamespace(ctx, DefaultName)
 
 			return err
 		})
 
-		assert.False(t, created)
+		require.ErrorIs(t, err, metastore.ErrNameExists)
+	})
+
+	t.Run("happy path: returns namespace on first call", func(t *testing.T) {
+		t.Parallel()
+		store := newStore(t)
+
+		var ns metastore.NamespaceRow
+		mustAtomic(t, store, func(ctx context.Context, tx metastore.TxOps) error {
+			var err error
+			ns, err = tx.CreateNamespace(ctx, DefaultName)
+
+			return err
+		})
+
+		assert.Equal(t, DefaultName, ns.Name)
+		assert.False(t, ns.CreatedAt.IsZero())
+		assert.False(t, ns.UpdatedAt.IsZero())
+
+		exists, err := store.NamespaceExists(t.Context(), DefaultName)
+		require.NoError(t, err)
+		assert.True(t, exists)
 	})
 }
 
 func exerciseDeleteNamespace(t *testing.T, newStore MetadataStoreSetupFunc) {
 	t.Helper()
 
-	t.Run("happy path: returns deleted=true and namespace no longer exists", func(t *testing.T) {
+	t.Run("edge case: returns ErrNameUnknown when namespace does not exist", func(t *testing.T) {
+		t.Parallel()
+		store := newStore(t)
+
+		err := store.Atomic(t.Context(), func(ctx context.Context, tx metastore.TxOps) error {
+			_, err := tx.DeleteNamespace(ctx, DefaultName)
+
+			return err
+		})
+
+		require.ErrorIs(t, err, metastore.ErrNameUnknown)
+	})
+
+	t.Run("happy path: returns deleted namespace and namespace no longer exists", func(t *testing.T) {
 		t.Parallel()
 		store := newStore(t)
 		mustAtomic(t, store, func(ctx context.Context, tx metastore.TxOps) error {
@@ -83,32 +97,20 @@ func exerciseDeleteNamespace(t *testing.T, newStore MetadataStoreSetupFunc) {
 			return err
 		})
 
-		var deleted bool
+		var ns metastore.NamespaceRow
 		mustAtomic(t, store, func(ctx context.Context, tx metastore.TxOps) error {
 			var err error
-			deleted, err = tx.DeleteNamespace(ctx, DefaultName)
+			ns, err = tx.DeleteNamespace(ctx, DefaultName)
 
 			return err
 		})
 
-		assert.True(t, deleted)
+		assert.Equal(t, DefaultName, ns.Name)
+		assert.False(t, ns.CreatedAt.IsZero())
+		assert.False(t, ns.UpdatedAt.IsZero())
+
 		exists, err := store.NamespaceExists(t.Context(), DefaultName)
 		require.NoError(t, err)
 		assert.False(t, exists)
-	})
-
-	t.Run("edge case: returns deleted=false when namespace does not exist", func(t *testing.T) {
-		t.Parallel()
-		store := newStore(t)
-
-		var deleted bool
-		mustAtomic(t, store, func(ctx context.Context, tx metastore.TxOps) error {
-			var err error
-			deleted, err = tx.DeleteNamespace(ctx, DefaultName)
-
-			return err
-		})
-
-		assert.False(t, deleted)
 	})
 }

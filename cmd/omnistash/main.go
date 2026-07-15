@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/tiamiru/omnistash/internal/logtag"
+	"github.com/tiamiru/omnistash/internal/metastore/sqlite"
+	"github.com/tiamiru/omnistash/internal/namespace"
 	"github.com/tiamiru/omnistash/rest"
 )
 
@@ -27,7 +29,8 @@ var (
 )
 
 type config struct {
-	addr string
+	addr         string
+	metastoreDSN string
 }
 
 func parseConfig(args []string) (config, error) {
@@ -35,6 +38,7 @@ func parseConfig(args []string) (config, error) {
 
 	var cfg config
 	fs.StringVar(&cfg.addr, "addr", ":10080", "listen address")
+	fs.StringVar(&cfg.metastoreDSN, "metastore-dsn", "omnistash.db", "SQLite database path")
 
 	err := fs.Parse(args)
 	if err != nil {
@@ -63,11 +67,31 @@ func main() {
 }
 
 func run(logger *slog.Logger, cfg config) error {
+	ctx := context.Background()
+
+	meta, err := sqlite.NewSQLiteMetadataStore(ctx, cfg.metastoreDSN)
+	if err != nil {
+		return fmt.Errorf("open metastore: %w", err)
+	}
+	defer func() {
+		closeErr := meta.Close()
+		if closeErr != nil {
+			logger.Warn("run: close metastore", logtag.Err(closeErr))
+		}
+	}()
+
+	err = sqlite.ApplyMigrations(ctx, meta)
+	if err != nil {
+		return fmt.Errorf("migrate metastore: %w", err)
+	}
+
+	ns := namespace.NewService(meta)
+
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(signalChan)
 
-	handler := rest.NewRegistryHandler(logger, version, commit, date)
+	handler := rest.NewRegistryHandler(logger, ns, version, commit, date)
 	server := rest.NewServer(handler, cfg.addr)
 
 	logger.Info("main: server started", slog.String("addr", server.Addr))
@@ -80,14 +104,14 @@ func run(logger *slog.Logger, cfg config) error {
 	select {
 	case sig := <-signalChan:
 		logger.Info("main: shutting down", slog.String("signal", sig.String()))
-	case err := <-serveErrChan:
+	case err = <-serveErrChan:
 		return fmt.Errorf("serve: %w", err)
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
-	err := server.Shutdown(shutdownCtx)
+	err = server.Shutdown(shutdownCtx)
 	if err != nil {
 		return fmt.Errorf("shutdown: %w", err)
 	}
