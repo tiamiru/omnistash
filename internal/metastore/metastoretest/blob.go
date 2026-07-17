@@ -105,7 +105,11 @@ func exerciseStatNamespaceBlob(t *testing.T, newStore MetadataStoreSetupFunc) {
 	})
 }
 
-func exerciseNamespaceBlobQuery(t *testing.T, newStore MetadataStoreSetupFunc, query func(ctx context.Context, tx metastore.TxOps, ns string) (int64, error)) {
+func exerciseNamespaceBlobQuery( //nolint:funlen
+	t *testing.T,
+	newStore MetadataStoreSetupFunc,
+	query func(ctx context.Context, tx metastore.TxOps, ns string) (int64, error),
+) {
 	t.Helper()
 
 	testCases := []struct {
