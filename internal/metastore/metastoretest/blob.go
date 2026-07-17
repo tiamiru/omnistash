@@ -93,69 +93,49 @@ func exerciseInsertNamespaceBlob(t *testing.T, newStore MetadataStoreSetupFunc) 
 
 func exerciseGetNamespaceBlob(t *testing.T, newStore MetadataStoreSetupFunc) {
 	t.Helper()
-
-	t.Run("error path: absent digest returns ErrBlobUnknown", func(t *testing.T) {
-		t.Parallel()
-		store := newStore(t)
-
-		err := store.Atomic(t.Context(), func(ctx context.Context, tx metastore.TxOps) error {
-			_, getErr := tx.GetNamespaceBlob(ctx, DefaultName, UnknownDigest)
-
-			return getErr
-		})
-		require.ErrorIs(t, err, metastore.ErrBlobUnknown)
-	})
-
-	t.Run("error path: digest scoped to a different namespace returns ErrBlobUnknown", func(t *testing.T) {
-		t.Parallel()
-		store := newStore(t)
-		seedNamespaceBlob(t, store, TestDigest)
-
-		err := store.Atomic(t.Context(), func(ctx context.Context, tx metastore.TxOps) error {
-			_, getErr := tx.GetNamespaceBlob(ctx, OtherName, TestDigest)
-
-			return getErr
-		})
-		require.ErrorIs(t, err, metastore.ErrBlobUnknown)
-	})
-
-	t.Run("happy path: returns size for an active blob", func(t *testing.T) {
-		t.Parallel()
-		store := newStore(t)
-		seedNamespaceBlob(t, store, TestDigest)
-
-		err := store.Atomic(t.Context(), func(ctx context.Context, tx metastore.TxOps) error {
-			got, getErr := tx.GetNamespaceBlob(ctx, DefaultName, TestDigest)
-			assert.Equal(t, TestSize, got)
-
-			return getErr
-		})
-		require.NoError(t, err)
+	exerciseNamespaceBlobQuery(t, newStore, func(ctx context.Context, tx metastore.TxOps, ns string) (int64, error) {
+		return tx.GetNamespaceBlob(ctx, ns, TestDigest)
 	})
 }
 
 func exerciseStatNamespaceBlob(t *testing.T, newStore MetadataStoreSetupFunc) {
 	t.Helper()
+	exerciseNamespaceBlobQuery(t, newStore, func(ctx context.Context, tx metastore.TxOps, ns string) (int64, error) {
+		return tx.StatNamespaceBlob(ctx, ns, TestDigest)
+	})
+}
+
+func exerciseNamespaceBlobQuery(t *testing.T, newStore MetadataStoreSetupFunc, query func(ctx context.Context, tx metastore.TxOps, ns string) (int64, error)) {
+	t.Helper()
 
 	testCases := []struct {
 		name     string
 		setup    func(t *testing.T, store metastore.MetadataStore)
+		ns       string
 		wantSize int64
 		wantErr  error
 	}{
 		{
-			name: "error path: absent digest returns ErrBlobUnknown",
-			setup: func(t *testing.T, _ metastore.MetadataStore) {
-				t.Helper()
-			},
+			name:    "error path: absent digest returns ErrBlobUnknown",
+			ns:      DefaultName,
 			wantErr: metastore.ErrBlobUnknown,
 		},
 		{
-			name: "happy path: returns size when digest exists in the given namespace",
+			name: "error path: digest scoped to a different namespace returns ErrBlobUnknown",
 			setup: func(t *testing.T, store metastore.MetadataStore) {
 				t.Helper()
 				seedNamespaceBlob(t, store, TestDigest)
 			},
+			ns:      OtherName,
+			wantErr: metastore.ErrBlobUnknown,
+		},
+		{
+			name: "happy path: returns size for an active blob",
+			setup: func(t *testing.T, store metastore.MetadataStore) {
+				t.Helper()
+				seedNamespaceBlob(t, store, TestDigest)
+			},
+			ns:       DefaultName,
 			wantSize: TestSize,
 		},
 	}
@@ -164,14 +144,16 @@ func exerciseStatNamespaceBlob(t *testing.T, newStore MetadataStoreSetupFunc) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			store := newStore(t)
-			tc.setup(t, store)
+			if tc.setup != nil {
+				tc.setup(t, store)
+			}
 
 			var got int64
 			err := store.Atomic(t.Context(), func(ctx context.Context, tx metastore.TxOps) error {
-				var statErr error
-				got, statErr = tx.StatNamespaceBlob(ctx, DefaultName, TestDigest)
+				var queryErr error
+				got, queryErr = query(ctx, tx, tc.ns)
 
-				return statErr
+				return queryErr
 			})
 
 			if tc.wantErr != nil {

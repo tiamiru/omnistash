@@ -44,7 +44,7 @@ func ExerciseAtomicContract(t *testing.T, newStore MetadataStoreSetupFunc) {
 			exerciseAtomicPanic(t, newStore)
 		})
 
-		t.Run("concurrency: exactly one of N concurrent transactions creates the namespace", func(t *testing.T) {
+		t.Run("edge case: exactly one of N concurrent transactions creates the namespace", func(t *testing.T) {
 			t.Parallel()
 			exerciseAtomicSerialization(t, newStore)
 		})
