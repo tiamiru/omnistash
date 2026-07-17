@@ -11,8 +11,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tiamiru/omnistash/internal/blobstore"
 	"github.com/tiamiru/omnistash/internal/clock/clocktest"
+)
+
+const (
+	testNamespace  = "library/test"
+	otherNamespace = "library/other"
 )
 
 func TestFindStaleStagingEntries(t *testing.T) {
@@ -329,7 +333,7 @@ func TestVacuumStagingBlobs(t *testing.T) {
 
 	t.Run("error path: canceled context returns error immediately", func(t *testing.T) {
 		t.Parallel()
-		s := NewFilesystemBlobStore(t.TempDir(), blobstore.PartitionBlobs)
+		s := NewFilesystemBlobStore(t.TempDir())
 		s.StartVacuumProcess()
 		t.Cleanup(func() { assert.NoError(t, s.StopVacuumProcess()) })
 
@@ -345,12 +349,12 @@ func TestVacuumStagingBlobs(t *testing.T) {
 		t.Parallel()
 		baseDir := t.TempDir()
 		now := time.Now()
-		stagingDir := filepath.Join(baseDir, string(blobstore.PartitionBlobs), ".staging")
+		stagingDir := filepath.Join(baseDir, testNamespace, ".staging")
 		require.NoError(t, os.MkdirAll(stagingDir, 0o750))
 		stale := filepath.Join(stagingDir, "stale")
 		require.NoError(t, os.WriteFile(stale, []byte("x"), 0o600))
 		require.NoError(t, os.Chtimes(stale, now.Add(-time.Hour), now.Add(-time.Hour)))
-		s := NewFilesystemBlobStore(baseDir, blobstore.PartitionBlobs)
+		s := NewFilesystemBlobStore(baseDir)
 
 		err := s.VacuumStagingBlobs(t.Context(), time.Minute)
 
@@ -360,11 +364,11 @@ func TestVacuumStagingBlobs(t *testing.T) {
 	t.Run("error path: unreadable staging dir propagates walk error", func(t *testing.T) {
 		t.Parallel()
 		baseDir := t.TempDir()
-		stagingDir := filepath.Join(baseDir, string(blobstore.PartitionBlobs), ".staging")
+		stagingDir := filepath.Join(baseDir, testNamespace, ".staging")
 		require.NoError(t, os.MkdirAll(stagingDir, 0o750))
 		require.NoError(t, os.Chmod(stagingDir, 0o000))
 		t.Cleanup(func() { _ = os.Chmod(stagingDir, 0o600) })
-		s := NewFilesystemBlobStore(baseDir, blobstore.PartitionBlobs)
+		s := NewFilesystemBlobStore(baseDir)
 		s.StartVacuumProcess()
 		t.Cleanup(func() { assert.NoError(t, s.StopVacuumProcess()) })
 
@@ -373,9 +377,9 @@ func TestVacuumStagingBlobs(t *testing.T) {
 		require.ErrorIs(t, err, os.ErrPermission)
 	})
 
-	t.Run("edge case: absent staging dir is a no-op", func(t *testing.T) {
+	t.Run("edge case: absent prefix dir is a no-op", func(t *testing.T) {
 		t.Parallel()
-		s := NewFilesystemBlobStore(t.TempDir(), blobstore.PartitionBlobs)
+		s := NewFilesystemBlobStore(t.TempDir())
 		s.StartVacuumProcess()
 		t.Cleanup(func() { assert.NoError(t, s.StopVacuumProcess()) })
 
@@ -389,11 +393,11 @@ func TestVacuumStagingBlobs(t *testing.T) {
 		baseDir := t.TempDir()
 		now := time.Now()
 		clk := clocktest.NewFake(now)
-		s := NewFilesystemBlobStore(baseDir, blobstore.PartitionBlobs, WithClock(clk))
+		s := NewFilesystemBlobStore(baseDir, WithClock(clk))
 		s.StartVacuumProcess()
 		t.Cleanup(func() { assert.NoError(t, s.StopVacuumProcess()) })
 
-		stagingDir := filepath.Join(baseDir, string(blobstore.PartitionBlobs), ".staging")
+		stagingDir := filepath.Join(baseDir, testNamespace, ".staging")
 		require.NoError(t, os.MkdirAll(stagingDir, 0o750))
 		stale := filepath.Join(stagingDir, "stale")
 		fresh := filepath.Join(stagingDir, "fresh")
@@ -409,5 +413,94 @@ func TestVacuumStagingBlobs(t *testing.T) {
 		require.ErrorIs(t, statErr, os.ErrNotExist)
 		_, statErr = os.Stat(fresh)
 		assert.NoError(t, statErr)
+	})
+
+	t.Run("happy path: removes stale files across multiple namespaces", func(t *testing.T) {
+		t.Parallel()
+		baseDir := t.TempDir()
+		now := time.Now()
+		clk := clocktest.NewFake(now)
+		s := NewFilesystemBlobStore(baseDir, WithClock(clk))
+		s.StartVacuumProcess()
+		t.Cleanup(func() { assert.NoError(t, s.StopVacuumProcess()) })
+
+		staleFiles := make([]string, 0, 2)
+		for _, ns := range []string{otherNamespace, testNamespace} {
+			stagingDir := filepath.Join(baseDir, ns, ".staging")
+			require.NoError(t, os.MkdirAll(stagingDir, 0o750))
+			stale := filepath.Join(stagingDir, "stale")
+			require.NoError(t, os.WriteFile(stale, []byte("x"), 0o600))
+			require.NoError(t, os.Chtimes(stale, now.Add(-time.Hour), now.Add(-time.Hour)))
+			staleFiles = append(staleFiles, stale)
+		}
+
+		err := s.VacuumStagingBlobs(t.Context(), time.Minute)
+
+		require.NoError(t, err)
+		for _, stale := range staleFiles {
+			_, statErr := os.Stat(stale)
+			assert.ErrorIs(t, statErr, os.ErrNotExist)
+		}
+	})
+
+	t.Run("happy path: stale files in one namespace do not affect fresh files in another", func(t *testing.T) {
+		t.Parallel()
+		baseDir := t.TempDir()
+		now := time.Now()
+		clk := clocktest.NewFake(now)
+		s := NewFilesystemBlobStore(baseDir, WithClock(clk))
+		s.StartVacuumProcess()
+		t.Cleanup(func() { assert.NoError(t, s.StopVacuumProcess()) })
+
+		// otherNamespace has a stale file.
+		staleStagingDir := filepath.Join(baseDir, otherNamespace, ".staging")
+		require.NoError(t, os.MkdirAll(staleStagingDir, 0o750))
+		stale := filepath.Join(staleStagingDir, "stale")
+		require.NoError(t, os.WriteFile(stale, []byte("x"), 0o600))
+		require.NoError(t, os.Chtimes(stale, now.Add(-time.Hour), now.Add(-time.Hour)))
+
+		// testNamespace has a fresh file.
+		freshStagingDir := filepath.Join(baseDir, testNamespace, ".staging")
+		require.NoError(t, os.MkdirAll(freshStagingDir, 0o750))
+		fresh := filepath.Join(freshStagingDir, "fresh")
+		require.NoError(t, os.WriteFile(fresh, []byte("x"), 0o600))
+		require.NoError(t, os.Chtimes(fresh, now, now))
+
+		err := s.VacuumStagingBlobs(t.Context(), time.Minute)
+
+		require.NoError(t, err)
+		_, statErr := os.Stat(stale)
+		require.ErrorIs(t, statErr, os.ErrNotExist)
+		_, statErr = os.Stat(fresh)
+		assert.NoError(t, statErr)
+	})
+
+	t.Run("error path: unreadable staging dir in one namespace does not block cleanup of another", func(t *testing.T) {
+		t.Parallel()
+		baseDir := t.TempDir()
+		now := time.Now()
+		clk := clocktest.NewFake(now)
+		s := NewFilesystemBlobStore(baseDir, WithClock(clk))
+		s.StartVacuumProcess()
+		t.Cleanup(func() { assert.NoError(t, s.StopVacuumProcess()) })
+
+		// otherNamespace staging dir is unreadable (walked first, lexicographically).
+		badStagingDir := filepath.Join(baseDir, otherNamespace, ".staging")
+		require.NoError(t, os.MkdirAll(badStagingDir, 0o750))
+		require.NoError(t, os.Chmod(badStagingDir, 0o000))
+		t.Cleanup(func() { _ = os.Chmod(badStagingDir, 0o600) })
+
+		// testNamespace has a stale file that should still be removed (walked second).
+		goodStagingDir := filepath.Join(baseDir, testNamespace, ".staging")
+		require.NoError(t, os.MkdirAll(goodStagingDir, 0o750))
+		stale := filepath.Join(goodStagingDir, "stale")
+		require.NoError(t, os.WriteFile(stale, []byte("x"), 0o600))
+		require.NoError(t, os.Chtimes(stale, now.Add(-time.Hour), now.Add(-time.Hour)))
+
+		err := s.VacuumStagingBlobs(t.Context(), time.Minute)
+
+		require.ErrorIs(t, err, os.ErrPermission)
+		_, statErr := os.Stat(stale)
+		assert.ErrorIs(t, statErr, os.ErrNotExist)
 	})
 }

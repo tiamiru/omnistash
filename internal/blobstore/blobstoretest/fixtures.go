@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	DefaultPartition blobstore.PartitionKey = "default"
-	OtherPartition   blobstore.PartitionKey = "other"
+	DefaultNamespace = "library/test"
+	OtherNamespace   = "library/other"
 
 	MalformedDigest = "notadigest"
 	FakeUploadID    = "00000000-0000-4000-8000-000000000000"
@@ -35,13 +35,13 @@ const (
 		"f665d0039c93828b7b58f33950bc817a0955a9c5000a8d3e280569f08745ca68"
 )
 
-func seedBlob(t *testing.T, blobStore blobstore.BlobStore, d digest.Digest, content string) {
+func seedBlob(t *testing.T, blobStore blobstore.BlobStore, namespace string, d digest.Digest, content string) {
 	t.Helper()
-	_, err := blobStore.PutBlob(d, int64(len(content)), strings.NewReader(content))
+	_, err := blobStore.PutBlob(namespace, d, int64(len(content)), strings.NewReader(content))
 	require.NoError(t, err)
 }
 
 func seedTestBlob(t *testing.T, blobStore blobstore.BlobStore) {
 	t.Helper()
-	seedBlob(t, blobStore, TestDigest, TestContent)
+	seedBlob(t, blobStore, DefaultNamespace, TestDigest, TestContent)
 }

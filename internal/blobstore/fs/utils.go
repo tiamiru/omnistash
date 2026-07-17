@@ -10,12 +10,12 @@ import (
 	"github.com/opencontainers/go-digest"
 )
 
-func buildBlobPath(prefix, partition string, d digest.Digest) string {
-	return filepath.Join(prefix, partition, d.Algorithm().String(), d.Hex())
+func buildBlobPath(prefix, namespace string, d digest.Digest) string {
+	return filepath.Join(prefix, namespace, d.Algorithm().String(), d.Hex())
 }
 
-func buildStagingPath(prefix, partition, id string) string {
-	return filepath.Join(prefix, partition, ".staging", id)
+func buildStagingPath(prefix, namespace, id string) string {
+	return filepath.Join(prefix, namespace, ".staging", id)
 }
 
 func removeFileIfExists(path string) error {

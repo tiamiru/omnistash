@@ -137,21 +137,38 @@ func (s *FilesystemBlobStore) VacuumStagingBlobs(
 		return fmt.Errorf("VacuumStagingBlobs: %w", err)
 	}
 
-	stagingDir := filepath.Join(s.prefix, string(s.partition), ".staging")
-	entries, statErrs, walkErr := findStaleStagingEntries(ctx, stagingDir, gracePeriod, s.clock.Now())
-
-	for _, statErr := range statErrs {
-		s.logger.Warn("VacuumStagingBlobs: stat entry", logtag.Err(statErr))
-	}
-
 	var errs []error
-	if len(entries) > 0 {
-		_, pathErrs, removeErr := s.vacuumManager.removeBatch(ctx, stagingDir, entries)
-		if removeErr != nil {
-			errs = append(errs, removeErr)
+
+	walkErr := filepath.WalkDir(s.prefix, func(path string, d iofs.DirEntry, walkEntryErr error) error {
+		if walkEntryErr != nil {
+			if errors.Is(walkEntryErr, iofs.ErrNotExist) && filepath.Clean(path) == filepath.Clean(s.prefix) {
+				return filepath.SkipAll
+			}
+			s.logger.Warn("VacuumStagingBlobs: walk entry", logtag.Path(path), logtag.Err(walkEntryErr))
+
+			return nil
 		}
-		errs = append(errs, pathErrs...)
-	}
+		if !d.IsDir() || d.Name() != ".staging" {
+			return nil
+		}
+
+		entries, statErrs, entriesWalkErr := findStaleStagingEntries(ctx, path, gracePeriod, s.clock.Now())
+		for _, statErr := range statErrs {
+			s.logger.Warn("VacuumStagingBlobs: stat entry", logtag.Err(statErr))
+		}
+		if len(entries) > 0 {
+			_, pathErrs, removeErr := s.vacuumManager.removeBatch(ctx, path, entries)
+			if removeErr != nil {
+				errs = append(errs, removeErr)
+			}
+			errs = append(errs, pathErrs...)
+		}
+		if entriesWalkErr != nil && !errors.Is(entriesWalkErr, iofs.ErrNotExist) {
+			errs = append(errs, fmt.Errorf("VacuumStagingBlobs: walk %s: %w", path, entriesWalkErr))
+		}
+
+		return filepath.SkipDir
+	})
 
 	if walkErr != nil && !errors.Is(walkErr, iofs.ErrNotExist) {
 		errs = append(errs, fmt.Errorf("VacuumStagingBlobs: walk: %w", walkErr))

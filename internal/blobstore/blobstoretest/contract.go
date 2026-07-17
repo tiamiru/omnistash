@@ -6,7 +6,7 @@ import (
 	"github.com/tiamiru/omnistash/internal/blobstore"
 )
 
-type BlobStoreSetupFunc func(t *testing.T, prefix string, partition blobstore.PartitionKey) blobstore.BlobStore
+type BlobStoreSetupFunc func(t *testing.T, prefix string) blobstore.BlobStore
 
 // ExerciseBlobStoreContract runs the full blobstore.BlobStore contract tests.
 func ExerciseBlobStoreContract(t *testing.T, newStore BlobStoreSetupFunc) {
@@ -16,5 +16,5 @@ func ExerciseBlobStoreContract(t *testing.T, newStore BlobStoreSetupFunc) {
 	ExerciseBlobReaderContract(t, newStore)
 	ExerciseBlobDeleterContract(t, newStore)
 	ExerciseBlobUploaderContract(t, newStore)
-	ExercisePartitionIsolationContract(t, newStore)
+	ExerciseNamespaceIsolationContract(t, newStore)
 }

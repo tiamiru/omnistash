@@ -52,18 +52,18 @@ func exerciseDeleteBlobTable(t *testing.T, newStore BlobStoreSetupFunc) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			s := newStore(t, t.Name(), DefaultPartition)
+			s := newStore(t, t.Name())
 			if tc.seed {
 				seedTestBlob(t, s)
 			}
 
-			err := s.DeleteBlob(t.Context(), tc.digest)
+			err := s.DeleteBlob(t.Context(), DefaultNamespace, tc.digest)
 
 			if tc.wantErr != nil {
 				require.ErrorIs(t, err, tc.wantErr)
 			} else {
 				require.NoError(t, err)
-				_, statErr := s.StatBlob(tc.digest)
+				_, statErr := s.StatBlob(DefaultNamespace, tc.digest)
 				assert.ErrorIs(t, statErr, blobstore.ErrBlobUnknown)
 			}
 		})
@@ -90,28 +90,28 @@ func exerciseBatchDeleteBlobsTable(t *testing.T, newStore BlobStoreSetupFunc) {
 			digests: []digest.Digest{TestDigest},
 		},
 		{
-			name:            "happy path: deletes existing blob",
-			seed:            true,
-			digests:         []digest.Digest{TestDigest},
-			wantBlobsAbsent: []digest.Digest{TestDigest},
-		},
-		{
 			name:            "edge case: mixed batch deletes the known digest and returns ErrPartialDeletion",
 			seed:            true,
 			digests:         []digest.Digest{TestDigest, MalformedDigest},
 			wantErr:         blobstore.ErrPartialDeletion,
 			wantBlobsAbsent: []digest.Digest{TestDigest},
 		},
+		{
+			name:            "happy path: deletes existing blob",
+			seed:            true,
+			digests:         []digest.Digest{TestDigest},
+			wantBlobsAbsent: []digest.Digest{TestDigest},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			s := newStore(t, t.Name(), DefaultPartition)
+			s := newStore(t, t.Name())
 			if tc.seed {
 				seedTestBlob(t, s)
 			}
 
-			err := s.BatchDeleteBlobs(t.Context(), tc.digests)
+			err := s.BatchDeleteBlobs(t.Context(), DefaultNamespace, tc.digests)
 
 			if tc.wantErr != nil {
 				require.ErrorIs(t, err, tc.wantErr)
@@ -119,7 +119,7 @@ func exerciseBatchDeleteBlobsTable(t *testing.T, newStore BlobStoreSetupFunc) {
 				require.NoError(t, err)
 			}
 			for _, d := range tc.wantBlobsAbsent {
-				_, statErr := s.StatBlob(d)
+				_, statErr := s.StatBlob(DefaultNamespace, d)
 				assert.ErrorIs(t, statErr, blobstore.ErrBlobUnknown)
 			}
 		})

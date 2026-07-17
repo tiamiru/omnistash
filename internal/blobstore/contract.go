@@ -9,14 +9,6 @@ import (
 	"github.com/opencontainers/go-digest"
 )
 
-type PartitionKey string
-
-const (
-	PartitionBlobs     PartitionKey = "blobs"
-	PartitionManifests PartitionKey = "manifests"
-	PartitionReferrers PartitionKey = "referrers"
-)
-
 var (
 	ErrBlobUnknown         = errors.New("blob unknown")
 	ErrInvalidDigest       = errors.New("invalid digest")
@@ -39,45 +31,45 @@ type BlobStore interface {
 
 type BlobReader interface {
 	// GetBlob returns a reader for the committed blob and its stored byte-size.
-	GetBlob(digest digest.Digest) (io.ReadCloser, int64, error)
+	GetBlob(namespace string, digest digest.Digest) (io.ReadCloser, int64, error)
 
 	// GetBlobRange writes the inclusive byte range [first, last] of the blob to w.
-	GetBlobRange(digest digest.Digest, first, last int64, w io.Writer) error
+	GetBlobRange(namespace string, digest digest.Digest, first, last int64, w io.Writer) error
 }
 
 type BlobDeleter interface {
 	// DeleteBlob removes the blob identified by digest. Returns ErrBlobUnknown if not present.
-	DeleteBlob(ctx context.Context, digest digest.Digest) error
+	DeleteBlob(ctx context.Context, namespace string, digest digest.Digest) error
 
 	// BatchDeleteBlobs removes the blobs identified by digests. Unknown digests are silently skipped. Invalid digests
 	// are returned as errors.
-	BatchDeleteBlobs(ctx context.Context, digests []digest.Digest) error
+	BatchDeleteBlobs(ctx context.Context, namespace string, digests []digest.Digest) error
 }
 
 type BlobWriter interface {
 	// PutBlob stores r under digest. Returns ErrBlobCommitted if the digest was already committed concurrently.
-	PutBlob(digest digest.Digest, size int64, r io.Reader) (int64, error)
+	PutBlob(namespace string, digest digest.Digest, size int64, r io.Reader) (int64, error)
 
 	// StatBlob returns the size of the blob without reading its content.
-	StatBlob(digest digest.Digest) (int64, error)
+	StatBlob(namespace string, digest digest.Digest) (int64, error)
 }
 
 type BlobUploader interface {
 	// InitiateBlobUpload creates a new staging area for a resumable upload and returns a unique upload ID.
-	InitiateBlobUpload() (uploadID string, err error)
+	InitiateBlobUpload(namespace string) (uploadID string, err error)
 
 	// AppendBlobChunk appends r at offset to the upload and returns the new total byte offset.
-	AppendBlobChunk(uploadID string, offset int64, r io.Reader) (int64, error)
+	AppendBlobChunk(namespace, uploadID string, offset int64, r io.Reader) (int64, error)
 
 	// GetBlobUploadOffset returns the number of bytes received so far for the upload.
-	GetBlobUploadOffset(uploadID string) (int64, error)
+	GetBlobUploadOffset(namespace, uploadID string) (int64, error)
 
 	// FinalizeBlobUpload verifies digest and size then commits the staged blob.
 	// Returns ErrBlobCommitted if the digest was already committed concurrently.
-	FinalizeBlobUpload(uploadID string, d digest.Digest, size int64) error
+	FinalizeBlobUpload(namespace, uploadID string, d digest.Digest, size int64) error
 
 	// CancelBlobUpload discards the upload and removes all temporary resources. A second call is a no-op.
-	CancelBlobUpload(uploadID string) error
+	CancelBlobUpload(namespace, uploadID string) error
 }
 
 // BlobVacuumer manages the lifecycle of the background vacuum process and exposes
@@ -89,6 +81,6 @@ type BlobVacuumer interface {
 	// StopVacuumProcess stops the vacuum process and waits for it to exit.
 	StopVacuumProcess() error
 
-	// VacuumStagingBlobs removes staging data older than gracePeriod.
+	// VacuumStagingBlobs removes staging data older than gracePeriod across all namespaces.
 	VacuumStagingBlobs(ctx context.Context, gracePeriod time.Duration) error
 }
