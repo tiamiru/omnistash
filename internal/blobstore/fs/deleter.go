@@ -22,42 +22,42 @@ func (s *FilesystemBlobStore) StopVacuumProcess() error {
 	return s.stopVacuum()
 }
 
-func (s *FilesystemBlobStore) DeleteBlob(ctx context.Context, d digest.Digest) error {
+func (s *FilesystemBlobStore) DeleteBlob(ctx context.Context, namespace string, d digest.Digest) error {
 	err := ctx.Err()
 	if err != nil {
-		return fmt.Errorf("DeleteBlob: digest=%s: %w", d, err)
+		return fmt.Errorf("DeleteBlob: namespace=%s digest=%s: %w", namespace, d, err)
 	}
 
 	err = blobs.ValidateDigest(d)
 	if err != nil {
-		return fmt.Errorf("DeleteBlob: digest=%s: %w", d, err)
+		return fmt.Errorf("DeleteBlob: namespace=%s digest=%s: %w", namespace, d, err)
 	}
 
-	dir := filepath.Join(s.prefix, string(s.partition))
-	p := buildBlobPath(s.prefix, string(s.partition), d)
+	dir := filepath.Join(s.prefix, namespace)
+	p := buildBlobPath(s.prefix, namespace, d)
 
 	removed, pathErrs, removeErr := s.vacuumManager.removeBatch(ctx, dir, []string{p})
 	if removeErr != nil {
-		return fmt.Errorf("DeleteBlob: digest=%s: %w", d, removeErr)
+		return fmt.Errorf("DeleteBlob: namespace=%s digest=%s: %w", namespace, d, removeErr)
 	}
 	pathErr := errors.Join(pathErrs...)
 	if pathErr != nil {
-		return fmt.Errorf("DeleteBlob: digest=%s: %w", d, pathErr)
+		return fmt.Errorf("DeleteBlob: namespace=%s digest=%s: %w", namespace, d, pathErr)
 	}
 	if removed == 0 {
-		return fmt.Errorf("%w: digest=%s", blobs.ErrBlobUnknown, d)
+		return fmt.Errorf("%w: namespace=%s digest=%s", blobs.ErrBlobUnknown, namespace, d)
 	}
 
 	return nil
 }
 
-func (s *FilesystemBlobStore) BatchDeleteBlobs(ctx context.Context, digests []digest.Digest) error {
+func (s *FilesystemBlobStore) BatchDeleteBlobs(ctx context.Context, namespace string, digests []digest.Digest) error {
 	err := ctx.Err()
 	if err != nil {
-		return fmt.Errorf("BatchDeleteBlobs: %w", err)
+		return fmt.Errorf("BatchDeleteBlobs: namespace=%s: %w", namespace, err)
 	}
 
-	dir := filepath.Join(s.prefix, string(s.partition))
+	dir := filepath.Join(s.prefix, namespace)
 
 	var (
 		paths []string
@@ -72,7 +72,7 @@ func (s *FilesystemBlobStore) BatchDeleteBlobs(ctx context.Context, digests []di
 			continue
 		}
 
-		paths = append(paths, buildBlobPath(s.prefix, string(s.partition), d))
+		paths = append(paths, buildBlobPath(s.prefix, namespace, d))
 	}
 
 	removed, pathErrs, removeErr := s.vacuumManager.removeBatch(ctx, dir, paths)

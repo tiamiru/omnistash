@@ -14,15 +14,15 @@ import (
 	"github.com/tiamiru/omnistash/internal/logtag"
 )
 
-func (s *FilesystemBlobStore) InitiateBlobUpload() (string, error) {
-	stagingDir := filepath.Join(s.prefix, string(s.partition), ".staging")
+func (s *FilesystemBlobStore) InitiateBlobUpload(namespace string) (string, error) {
+	stagingDir := filepath.Join(s.prefix, namespace, ".staging")
 	err := os.MkdirAll(stagingDir, 0o750)
 	if err != nil {
-		return "", fmt.Errorf("InitiateBlobUpload: mkdir staging: %w", err)
+		return "", fmt.Errorf("InitiateBlobUpload: namespace=%s: mkdir staging: %w", namespace, err)
 	}
 
 	uploadID := uuid.New().String()
-	stagingPath := buildStagingPath(s.prefix, string(s.partition), uploadID)
+	stagingPath := buildStagingPath(s.prefix, namespace, uploadID)
 
 	f, err := os.OpenFile( //nolint:gosec // path built from constructor args + UUID
 		stagingPath,
@@ -30,23 +30,23 @@ func (s *FilesystemBlobStore) InitiateBlobUpload() (string, error) {
 		0o600,
 	)
 	if err != nil {
-		return "", fmt.Errorf("InitiateBlobUpload: create staging: %w", err)
+		return "", fmt.Errorf("InitiateBlobUpload: namespace=%s: create staging: %w", namespace, err)
 	}
 
 	closeErr := f.Close()
 	if closeErr != nil {
-		return "", fmt.Errorf("InitiateBlobUpload: close staging: %w", closeErr)
+		return "", fmt.Errorf("InitiateBlobUpload: namespace=%s: close staging: %w", namespace, closeErr)
 	}
 
 	return uploadID, nil
 }
 
-func (s *FilesystemBlobStore) AppendBlobChunk(uploadID string, offset int64, r io.Reader) (int64, error) {
+func (s *FilesystemBlobStore) AppendBlobChunk(namespace, uploadID string, offset int64, r io.Reader) (int64, error) {
 	if offset < 0 {
 		return 0, fmt.Errorf("%w: offset=%d", blobstore.ErrBlobUploadInvalid, offset)
 	}
 
-	stagingPath := buildStagingPath(s.prefix, string(s.partition), uploadID)
+	stagingPath := buildStagingPath(s.prefix, namespace, uploadID)
 
 	f, err := os.OpenFile( //nolint:gosec // path built from constructor args + uploadID
 		stagingPath,
@@ -55,7 +55,8 @@ func (s *FilesystemBlobStore) AppendBlobChunk(uploadID string, offset int64, r i
 	)
 	if err != nil {
 		return 0, fmt.Errorf(
-			"AppendBlobChunk: upload_id=%s: %w",
+			"AppendBlobChunk: namespace=%s upload_id=%s: %w",
+			namespace,
 			uploadID,
 			mapNotExistErr(err, blobstore.ErrBlobUploadUnknown),
 		)
@@ -69,7 +70,7 @@ func (s *FilesystemBlobStore) AppendBlobChunk(uploadID string, offset int64, r i
 
 	fi, err := f.Stat()
 	if err != nil {
-		return 0, fmt.Errorf("AppendBlobChunk: upload_id=%s: stat: %w", uploadID, err)
+		return 0, fmt.Errorf("AppendBlobChunk: namespace=%s upload_id=%s: stat: %w", namespace, uploadID, err)
 	}
 
 	if fi.Size() != offset {
@@ -78,24 +79,25 @@ func (s *FilesystemBlobStore) AppendBlobChunk(uploadID string, offset int64, r i
 
 	written, err := io.Copy(f, r)
 	if err != nil {
-		return 0, fmt.Errorf("AppendBlobChunk: upload_id=%s: write: %w", uploadID, err)
+		return 0, fmt.Errorf("AppendBlobChunk: namespace=%s upload_id=%s: write: %w", namespace, uploadID, err)
 	}
 
 	err = f.Sync()
 	if err != nil {
-		return 0, fmt.Errorf("AppendBlobChunk: upload_id=%s: sync: %w", uploadID, err)
+		return 0, fmt.Errorf("AppendBlobChunk: namespace=%s upload_id=%s: sync: %w", namespace, uploadID, err)
 	}
 
 	return offset + written, nil
 }
 
-func (s *FilesystemBlobStore) GetBlobUploadOffset(uploadID string) (int64, error) {
-	stagingPath := buildStagingPath(s.prefix, string(s.partition), uploadID)
+func (s *FilesystemBlobStore) GetBlobUploadOffset(namespace, uploadID string) (int64, error) {
+	stagingPath := buildStagingPath(s.prefix, namespace, uploadID)
 
 	fi, err := os.Stat(stagingPath)
 	if err != nil {
 		return 0, fmt.Errorf(
-			"GetBlobUploadOffset: upload_id=%s: %w",
+			"GetBlobUploadOffset: namespace=%s upload_id=%s: %w",
+			namespace,
 			uploadID,
 			mapNotExistErr(err, blobstore.ErrBlobUploadUnknown),
 		)
@@ -104,22 +106,22 @@ func (s *FilesystemBlobStore) GetBlobUploadOffset(uploadID string) (int64, error
 	return fi.Size(), nil
 }
 
-func (s *FilesystemBlobStore) FinalizeBlobUpload(uploadID string, d digest.Digest, size int64) error {
+func (s *FilesystemBlobStore) FinalizeBlobUpload(namespace, uploadID string, d digest.Digest, size int64) error {
 	err := blobstore.ValidateDigest(d)
 	if err != nil {
-		return fmt.Errorf("FinalizeBlobUpload: upload_id=%s digest=%s: %w", uploadID, d, err)
+		return fmt.Errorf("FinalizeBlobUpload: namespace=%s upload_id=%s digest=%s: %w", namespace, uploadID, d, err)
 	}
 
-	stagingPath := buildStagingPath(s.prefix, string(s.partition), uploadID)
+	stagingPath := buildStagingPath(s.prefix, namespace, uploadID)
 
 	err = s.verifyStagingBlob(stagingPath, d, size)
 	if err != nil {
-		return fmt.Errorf("FinalizeBlobUpload: upload_id=%s digest=%s: %w", uploadID, d, err)
+		return fmt.Errorf("FinalizeBlobUpload: namespace=%s upload_id=%s digest=%s: %w", namespace, uploadID, d, err)
 	}
 
-	err = s.commitStagingBlob(stagingPath, d)
+	err = s.commitStagingBlob(namespace, stagingPath, d)
 	if err != nil {
-		return fmt.Errorf("FinalizeBlobUpload: upload_id=%s digest=%s: %w", uploadID, d, err)
+		return fmt.Errorf("FinalizeBlobUpload: namespace=%s upload_id=%s digest=%s: %w", namespace, uploadID, d, err)
 	}
 
 	return nil
@@ -161,8 +163,8 @@ func (s *FilesystemBlobStore) verifyStagingBlob(stagingPath string, d digest.Dig
 	return blobstore.MatchDigest(d, actual)
 }
 
-func (s *FilesystemBlobStore) commitStagingBlob(stagingPath string, d digest.Digest) error {
-	err := s.linkStagedFile(stagingPath, d)
+func (s *FilesystemBlobStore) commitStagingBlob(namespace, stagingPath string, d digest.Digest) error {
+	err := s.linkStagedFile(namespace, stagingPath, d)
 	if err != nil && !errors.Is(err, blobstore.ErrBlobCommitted) {
 		return err
 	}
@@ -175,12 +177,12 @@ func (s *FilesystemBlobStore) commitStagingBlob(stagingPath string, d digest.Dig
 	return err
 }
 
-func (s *FilesystemBlobStore) CancelBlobUpload(uploadID string) error {
-	stagingPath := buildStagingPath(s.prefix, string(s.partition), uploadID)
+func (s *FilesystemBlobStore) CancelBlobUpload(namespace, uploadID string) error {
+	stagingPath := buildStagingPath(s.prefix, namespace, uploadID)
 
 	err := removeFileIfExists(stagingPath)
 	if err != nil {
-		return fmt.Errorf("CancelBlobUpload: upload_id=%s: %w", uploadID, err)
+		return fmt.Errorf("CancelBlobUpload: namespace=%s upload_id=%s: %w", namespace, uploadID, err)
 	}
 
 	return nil

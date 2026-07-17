@@ -22,19 +22,17 @@ var _ blobstore.BlobVacuumer = &FilesystemBlobStore{}
 
 type FilesystemBlobStore struct {
 	prefix        string
-	partition     blobstore.PartitionKey
 	logger        *slog.Logger
 	clock         clock.Clock
 	vacuumManager *VacuumManager
 	stopVacuum    func() error
 }
 
-func NewFilesystemBlobStore(prefix string, partition blobstore.PartitionKey, opts ...Option) *FilesystemBlobStore {
+func NewFilesystemBlobStore(prefix string, opts ...Option) *FilesystemBlobStore {
 	s := &FilesystemBlobStore{
-		prefix:    prefix,
-		partition: partition,
-		logger:    slog.New(slog.DiscardHandler),
-		clock:     clock.NewClock(),
+		prefix: prefix,
+		logger: slog.New(slog.DiscardHandler),
+		clock:  clock.NewClock(),
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -49,19 +47,19 @@ func NewFilesystemBlobStore(prefix string, partition blobstore.PartitionKey, opt
 	return s
 }
 
-func (s *FilesystemBlobStore) PutBlob(d digest.Digest, size int64, r io.Reader) (int64, error) {
+func (s *FilesystemBlobStore) PutBlob(namespace string, d digest.Digest, size int64, r io.Reader) (int64, error) {
 	err := blobstore.ValidateDigest(d)
 	if err != nil {
-		return 0, fmt.Errorf("PutBlob: digest=%s: %w", d, err)
+		return 0, fmt.Errorf("PutBlob: namespace=%s digest=%s: %w", namespace, d, err)
 	}
 
 	if size < 0 {
-		return 0, fmt.Errorf("%w: size=%d", blobstore.ErrSizeInvalid, size)
+		return 0, fmt.Errorf("%w: namespace=%s digest=%s size=%d", blobstore.ErrSizeInvalid, namespace, d, size)
 	}
 
-	tmpPath, n, err := s.writeBlobToStaging(d, size, r)
+	tmpPath, n, err := s.writeBlobToStaging(namespace, d, size, r)
 	if err != nil {
-		return 0, fmt.Errorf("PutBlob: digest=%s: %w", d, err)
+		return 0, fmt.Errorf("PutBlob: namespace=%s digest=%s: %w", namespace, d, err)
 	}
 
 	defer func() {
@@ -71,40 +69,45 @@ func (s *FilesystemBlobStore) PutBlob(d digest.Digest, size int64, r io.Reader) 
 		}
 	}()
 
-	err = s.linkStagedFile(tmpPath, d)
+	err = s.linkStagedFile(namespace, tmpPath, d)
 	if err != nil {
-		return 0, fmt.Errorf("PutBlob: digest=%s: %w", d, err)
+		return 0, fmt.Errorf("PutBlob: namespace=%s digest=%s: %w", namespace, d, err)
 	}
 
 	return n, nil
 }
 
-func (s *FilesystemBlobStore) StatBlob(d digest.Digest) (int64, error) {
+func (s *FilesystemBlobStore) StatBlob(namespace string, d digest.Digest) (int64, error) {
 	err := blobstore.ValidateDigest(d)
 	if err != nil {
-		return 0, fmt.Errorf("StatBlob: digest=%s: %w", d, err)
+		return 0, fmt.Errorf("StatBlob: namespace=%s digest=%s: %w", namespace, d, err)
 	}
 
-	p := buildBlobPath(s.prefix, string(s.partition), d)
+	p := buildBlobPath(s.prefix, namespace, d)
 	fi, err := os.Stat(p)
 	if err != nil {
 		if errors.Is(err, iofs.ErrNotExist) {
-			return 0, fmt.Errorf("%w: digest=%s", blobstore.ErrBlobUnknown, d)
+			return 0, fmt.Errorf("%w: namespace=%s digest=%s", blobstore.ErrBlobUnknown, namespace, d)
 		}
 
-		return 0, fmt.Errorf("StatBlob: digest=%s: stat: %w", d, err)
+		return 0, fmt.Errorf("StatBlob: namespace=%s digest=%s: stat: %w", namespace, d, err)
 	}
 
 	return fi.Size(), nil
 }
 
-func (s *FilesystemBlobStore) writeBlobToStaging(d digest.Digest, size int64, r io.Reader) (string, int64, error) {
+func (s *FilesystemBlobStore) writeBlobToStaging(
+	namespace string,
+	d digest.Digest,
+	size int64,
+	r io.Reader,
+) (string, int64, error) {
 	h, err := blobstore.HasherFor(d)
 	if err != nil {
 		return "", 0, err
 	}
 
-	tmpPath, n, err := s.writeToStaging(io.TeeReader(r, h))
+	tmpPath, n, err := s.writeToStaging(namespace, io.TeeReader(r, h))
 	if err != nil {
 		return "", 0, err
 	}
@@ -132,14 +135,14 @@ func (s *FilesystemBlobStore) writeBlobToStaging(d digest.Digest, size int64, r 
 	return tmpPath, n, nil
 }
 
-func (s *FilesystemBlobStore) writeToStaging(r io.Reader) (_ string, _ int64, err error) {
-	stagingDir := filepath.Join(s.prefix, string(s.partition), ".staging")
+func (s *FilesystemBlobStore) writeToStaging(namespace string, r io.Reader) (_ string, _ int64, err error) {
+	stagingDir := filepath.Join(s.prefix, namespace, ".staging")
 	err = os.MkdirAll(stagingDir, 0o750)
 	if err != nil {
 		return "", 0, fmt.Errorf("mkdir staging: %w", err)
 	}
 
-	tmpPath := buildStagingPath(s.prefix, string(s.partition), uuid.New().String())
+	tmpPath := buildStagingPath(s.prefix, namespace, uuid.New().String())
 	f, err := os.OpenFile( //nolint:gosec // path built from constructor args + UUID
 		tmpPath,
 		os.O_CREATE|os.O_WRONLY|os.O_EXCL,
@@ -175,8 +178,8 @@ func (s *FilesystemBlobStore) writeToStaging(r io.Reader) (_ string, _ int64, er
 	return tmpPath, n, nil
 }
 
-func (s *FilesystemBlobStore) linkStagedFile(tmpPath string, d digest.Digest) error {
-	destPath := buildBlobPath(s.prefix, string(s.partition), d)
+func (s *FilesystemBlobStore) linkStagedFile(namespace, tmpPath string, d digest.Digest) error {
+	destPath := buildBlobPath(s.prefix, namespace, d)
 	destDir := filepath.Dir(destPath)
 
 	err := os.MkdirAll(destDir, 0o750)
@@ -187,7 +190,7 @@ func (s *FilesystemBlobStore) linkStagedFile(tmpPath string, d digest.Digest) er
 	err = os.Link(tmpPath, destPath)
 	if err != nil {
 		if errors.Is(err, iofs.ErrExist) {
-			return fmt.Errorf("%w: digest=%s", blobstore.ErrBlobCommitted, d)
+			return fmt.Errorf("%w: namespace=%s digest=%s", blobstore.ErrBlobCommitted, namespace, d)
 		}
 
 		return fmt.Errorf("link: %w", err)

@@ -14,9 +14,9 @@ import (
 func TestFilesystemBlobStore_Contract(t *testing.T) {
 	t.Parallel()
 	baseDir := t.TempDir()
-	newStore := func(t *testing.T, prefix string, partition blobstore.PartitionKey) blobstore.BlobStore {
+	newStore := func(t *testing.T, prefix string) blobstore.BlobStore {
 		t.Helper()
-		s := fs.NewFilesystemBlobStore(filepath.Join(baseDir, prefix), partition)
+		s := fs.NewFilesystemBlobStore(filepath.Join(baseDir, prefix))
 		s.StartVacuumProcess()
 		t.Cleanup(func() { assert.NoError(t, s.StopVacuumProcess()) })
 

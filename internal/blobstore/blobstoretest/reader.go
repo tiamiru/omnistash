@@ -32,6 +32,7 @@ func ExerciseBlobReaderContract(t *testing.T, newStore BlobStoreSetupFunc) {
 	})
 }
 
+//nolint:funlen
 func exerciseGetBlob(t *testing.T, newStore BlobStoreSetupFunc) {
 	t.Helper()
 
@@ -71,12 +72,12 @@ func exerciseGetBlob(t *testing.T, newStore BlobStoreSetupFunc) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			s := newStore(t, t.Name(), DefaultPartition)
+			s := newStore(t, t.Name())
 			if tc.seed {
-				seedBlob(t, s, tc.digest, TestContent)
+				seedBlob(t, s, DefaultNamespace, tc.digest, TestContent)
 			}
 
-			rc, size, err := s.GetBlob(tc.digest)
+			rc, size, err := s.GetBlob(DefaultNamespace, tc.digest)
 
 			if tc.wantErr != nil {
 				require.ErrorIs(t, err, tc.wantErr)
@@ -88,7 +89,8 @@ func exerciseGetBlob(t *testing.T, newStore BlobStoreSetupFunc) {
 					assert.NoError(t, rc.Close())
 				})
 				assert.Equal(t, tc.wantSize, size)
-				data, _ := io.ReadAll(rc)
+				data, err := io.ReadAll(rc)
+				require.NoError(t, err)
 				assert.Equal(t, tc.wantContent, string(data))
 			}
 		})
@@ -174,13 +176,13 @@ func exerciseGetBlobRange(t *testing.T, newStore BlobStoreSetupFunc) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			s := newStore(t, t.Name(), DefaultPartition)
+			s := newStore(t, t.Name())
 			if tc.seed {
 				seedTestBlob(t, s)
 			}
 
 			var buf bytes.Buffer
-			err := s.GetBlobRange(tc.digest, tc.first, tc.last, &buf)
+			err := s.GetBlobRange(DefaultNamespace, tc.digest, tc.first, tc.last, &buf)
 
 			if tc.wantErr != nil {
 				require.ErrorIs(t, err, tc.wantErr)

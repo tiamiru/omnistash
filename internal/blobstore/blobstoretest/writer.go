@@ -17,7 +17,36 @@ func ExerciseBlobWriterContract(t *testing.T, newStore BlobStoreSetupFunc) {
 	t.Run("PutBlob", func(t *testing.T) {
 		t.Parallel()
 		exercisePutBlobTable(t, newStore)
-		exercisePutBlobCrossAlgorithm(t, newStore)
+		t.Run(
+			"happy path: same content is independently committable under a different digest algorithm",
+			func(t *testing.T) {
+				t.Parallel()
+				s := newStore(t, t.Name())
+
+				_, err := s.PutBlob(
+					DefaultNamespace,
+					TestDigest,
+					int64(len(TestContent)),
+					strings.NewReader(TestContent),
+				)
+				require.NoError(t, err)
+				_, err = s.PutBlob(
+					DefaultNamespace,
+					TestDigest512,
+					int64(len(TestContent)),
+					strings.NewReader(TestContent),
+				)
+				require.NoError(t, err, "the same content under a different digest algorithm is a distinct CAS entry")
+
+				sizeSHA256, err := s.StatBlob(DefaultNamespace, TestDigest)
+				require.NoError(t, err)
+				assert.Equal(t, int64(len(TestContent)), sizeSHA256)
+
+				sizeSHA512, err := s.StatBlob(DefaultNamespace, TestDigest512)
+				require.NoError(t, err)
+				assert.Equal(t, int64(len(TestContent)), sizeSHA512)
+			},
+		)
 	})
 
 	t.Run("StatBlob", func(t *testing.T) {
@@ -95,12 +124,12 @@ func exercisePutBlobTable(t *testing.T, newStore BlobStoreSetupFunc) { //nolint:
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			s := newStore(t, t.Name(), DefaultPartition)
+			s := newStore(t, t.Name())
 			if tc.seed {
 				seedTestBlob(t, s)
 			}
 
-			size, err := s.PutBlob(tc.digest, tc.size, strings.NewReader(tc.content))
+			size, err := s.PutBlob(DefaultNamespace, tc.digest, tc.size, strings.NewReader(tc.content))
 
 			if tc.wantErr != nil {
 				require.ErrorIs(t, err, tc.wantErr)
@@ -110,7 +139,7 @@ func exercisePutBlobTable(t *testing.T, newStore BlobStoreSetupFunc) { //nolint:
 				assert.Equal(t, tc.wantSize, size)
 			}
 			if tc.wantBlobAbsent != "" {
-				_, statErr := s.StatBlob(tc.wantBlobAbsent)
+				_, statErr := s.StatBlob(DefaultNamespace, tc.wantBlobAbsent)
 				require.ErrorIs(t, statErr, blobstore.ErrBlobUnknown)
 			}
 		})
@@ -148,12 +177,12 @@ func exerciseStatBlobTable(t *testing.T, newStore BlobStoreSetupFunc) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			s := newStore(t, t.Name(), DefaultPartition)
+			s := newStore(t, t.Name())
 			if tc.seed {
 				seedTestBlob(t, s)
 			}
 
-			size, err := s.StatBlob(tc.digest)
+			size, err := s.StatBlob(DefaultNamespace, tc.digest)
 
 			if tc.wantErr != nil {
 				require.ErrorIs(t, err, tc.wantErr)
@@ -164,27 +193,4 @@ func exerciseStatBlobTable(t *testing.T, newStore BlobStoreSetupFunc) {
 			}
 		})
 	}
-}
-
-func exercisePutBlobCrossAlgorithm(t *testing.T, newStore BlobStoreSetupFunc) {
-	t.Helper()
-
-	name := "happy path: same content is independently committable under a different digest algorithm"
-	t.Run(name, func(t *testing.T) {
-		t.Parallel()
-		s := newStore(t, t.Name(), DefaultPartition)
-
-		_, err := s.PutBlob(TestDigest, int64(len(TestContent)), strings.NewReader(TestContent))
-		require.NoError(t, err)
-		_, err = s.PutBlob(TestDigest512, int64(len(TestContent)), strings.NewReader(TestContent))
-		require.NoError(t, err, "the same content under a different digest algorithm is a distinct CAS entry")
-
-		sizeSHA256, err := s.StatBlob(TestDigest)
-		require.NoError(t, err)
-		assert.Equal(t, int64(len(TestContent)), sizeSHA256)
-
-		sizeSHA512, err := s.StatBlob(TestDigest512)
-		require.NoError(t, err)
-		assert.Equal(t, int64(len(TestContent)), sizeSHA512)
-	})
 }

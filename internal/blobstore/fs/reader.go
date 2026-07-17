@@ -12,25 +12,25 @@ import (
 	"github.com/tiamiru/omnistash/internal/blobstore"
 )
 
-func (s *FilesystemBlobStore) GetBlob(d digest.Digest) (io.ReadCloser, int64, error) {
+func (s *FilesystemBlobStore) GetBlob(namespace string, d digest.Digest) (io.ReadCloser, int64, error) {
 	err := blobstore.ValidateDigest(d)
 	if err != nil {
-		return nil, 0, fmt.Errorf("GetBlob: digest=%s: %w", d, err)
+		return nil, 0, fmt.Errorf("GetBlob: namespace=%s digest=%s: %w", namespace, d, err)
 	}
 
-	p := buildBlobPath(s.prefix, string(s.partition), d)
+	p := buildBlobPath(s.prefix, namespace, d)
 	f, err := os.Open(p) //nolint:gosec // path is safe as digest validated above
 	if err != nil {
 		if errors.Is(err, iofs.ErrNotExist) {
-			return nil, 0, fmt.Errorf("%w: digest=%s", blobstore.ErrBlobUnknown, d)
+			return nil, 0, fmt.Errorf("%w: namespace=%s digest=%s", blobstore.ErrBlobUnknown, namespace, d)
 		}
 
-		return nil, 0, fmt.Errorf("GetBlob: digest=%s: open: %w", d, err)
+		return nil, 0, fmt.Errorf("GetBlob: namespace=%s digest=%s: open: %w", namespace, d, err)
 	}
 
 	fi, err := f.Stat()
 	if err != nil {
-		statErr := fmt.Errorf("GetBlob: digest=%s: stat: %w", d, err)
+		statErr := fmt.Errorf("GetBlob: namespace=%s digest=%s: stat: %w", namespace, d, err)
 		closeErr := f.Close()
 		if closeErr != nil {
 			return nil, 0, errors.Join(statErr, fmt.Errorf("GetBlob: close: %w", closeErr))
@@ -42,24 +42,29 @@ func (s *FilesystemBlobStore) GetBlob(d digest.Digest) (io.ReadCloser, int64, er
 	return f, fi.Size(), nil
 }
 
-func (s *FilesystemBlobStore) GetBlobRange(d digest.Digest, first, last int64, w io.Writer) (err error) {
+func (s *FilesystemBlobStore) GetBlobRange(
+	namespace string,
+	d digest.Digest,
+	first, last int64,
+	w io.Writer,
+) (err error) {
 	err = blobstore.ValidateDigest(d)
 	if err != nil {
-		return fmt.Errorf("GetBlobRange: digest=%s: %w", d, err)
+		return fmt.Errorf("GetBlobRange: namespace=%s digest=%s: %w", namespace, d, err)
 	}
 
 	if first < 0 || last < first {
 		return fmt.Errorf("%w: first=%d last=%d", blobstore.ErrInvalidRange, first, last)
 	}
 
-	p := buildBlobPath(s.prefix, string(s.partition), d)
+	p := buildBlobPath(s.prefix, namespace, d)
 	f, err := os.Open(p) //nolint:gosec // path is safe as digest validated above
 	if err != nil {
 		if errors.Is(err, iofs.ErrNotExist) {
-			return fmt.Errorf("%w: digest=%s", blobstore.ErrBlobUnknown, d)
+			return fmt.Errorf("%w: namespace=%s digest=%s", blobstore.ErrBlobUnknown, namespace, d)
 		}
 
-		return fmt.Errorf("GetBlobRange: digest=%s: open: %w", d, err)
+		return fmt.Errorf("GetBlobRange: namespace=%s digest=%s: open: %w", namespace, d, err)
 	}
 
 	defer func() {
@@ -71,7 +76,7 @@ func (s *FilesystemBlobStore) GetBlobRange(d digest.Digest, first, last int64, w
 
 	fi, err := f.Stat()
 	if err != nil {
-		return fmt.Errorf("GetBlobRange: digest=%s: stat: %w", d, err)
+		return fmt.Errorf("GetBlobRange: namespace=%s digest=%s: stat: %w", namespace, d, err)
 	}
 
 	if last >= fi.Size() {
@@ -80,12 +85,12 @@ func (s *FilesystemBlobStore) GetBlobRange(d digest.Digest, first, last int64, w
 
 	_, err = f.Seek(first, io.SeekStart)
 	if err != nil {
-		return fmt.Errorf("GetBlobRange: digest=%s: seek: %w", d, err)
+		return fmt.Errorf("GetBlobRange: namespace=%s digest=%s: seek: %w", namespace, d, err)
 	}
 
 	_, err = io.CopyN(w, f, last-first+1)
 	if err != nil {
-		return fmt.Errorf("GetBlobRange: digest=%s: copy: %w", d, err)
+		return fmt.Errorf("GetBlobRange: namespace=%s digest=%s: copy: %w", namespace, d, err)
 	}
 
 	return nil

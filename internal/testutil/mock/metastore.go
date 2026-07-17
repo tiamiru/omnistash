@@ -3,6 +3,7 @@ package mock
 import (
 	"context"
 
+	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/tiamiru/omnistash/internal/metastore"
@@ -58,4 +59,41 @@ func (m *TxOps) DeleteNamespace(ctx context.Context, name string) (metastore.Nam
 	ns, _ := args.Get(0).(metastore.NamespaceRow)
 
 	return ns, args.Error(1)
+}
+
+func (m *TxOps) InsertNamespaceBlob(
+	ctx context.Context,
+	name string,
+	d digest.Digest,
+	size int64,
+) error {
+	args := m.Called(ctx, name, d, size)
+
+	return args.Error(0)
+}
+
+func (m *TxOps) GetNamespaceBlob(ctx context.Context, name string, d digest.Digest) (int64, error) {
+	args := m.Called(ctx, name, d)
+
+	n, ok := args.Get(0).(int64)
+	if !ok {
+		panic("mock: GetNamespaceBlob: args.Get(0) is not int64")
+	}
+
+	return n, args.Error(1)
+}
+
+func (m *TxOps) StatNamespaceBlob(
+	ctx context.Context,
+	name string,
+	d digest.Digest,
+) (int64, error) {
+	args := m.Called(ctx, name, d)
+
+	n, ok := args.Get(0).(int64)
+	if !ok {
+		panic("mock: StatNamespaceBlob: args.Get(0) is not int64")
+	}
+
+	return n, args.Error(1)
 }
