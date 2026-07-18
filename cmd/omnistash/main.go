@@ -88,13 +88,12 @@ func run(logger *slog.Logger, cfg config) error {
 
 	blobStore := fsblobstore.NewFilesystemBlobStore(cfg.blobstorePath, fsblobstore.WithLogger(logger))
 	blobSvc := blob.NewService(meta, blobStore)
-	blobUploadSvc := blob.NewUploadService(meta, blobStore)
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(signalChan)
 
-	handler := rest.NewRegistryHandler(logger, ns, blobSvc, blobUploadSvc, version, commit, date)
+	handler := rest.NewRegistryHandler(logger, ns, blobSvc, version, commit, date)
 	server := rest.NewServer(handler, cfg.addr)
 
 	logger.Info("main: server started", slog.String("addr", server.Addr))
