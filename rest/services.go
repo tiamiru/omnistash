@@ -11,9 +11,8 @@ import (
 )
 
 var (
-	_ NamespaceService  = &namespace.Service{}
-	_ BlobService       = &blob.Service{}
-	_ BlobUploadService = &blob.UploadService{}
+	_ NamespaceService = &namespace.Service{}
+	_ BlobService      = &blob.Service{}
 )
 
 type NamespaceService interface {
@@ -29,11 +28,7 @@ type BlobService interface {
 		name string,
 		d digest.Digest,
 		first, last int64,
-		w io.Writer,
-	) (totalSize int64, err error)
-}
-
-type BlobUploadService interface {
+	) (rc io.ReadCloser, totalSize int64, err error)
 	InitiateUpload(ctx context.Context, name string) (uploadID string, err error)
 	MonolithicUpload(ctx context.Context, name string, d digest.Digest, size int64, r io.Reader) error
 	AppendChunk(ctx context.Context, name, uploadID string, offset int64, r io.Reader) (newOffset int64, err error)

@@ -3,6 +3,8 @@ package namespace
 import (
 	"fmt"
 	"regexp"
+
+	"github.com/tiamiru/omnistash/internal/ocierror"
 )
 
 // namePattern mirrors the OCI distribution spec's repository name grammar.
@@ -11,7 +13,7 @@ var namePattern = regexp.MustCompile(`^[a-z0-9]+((\.|_|__|-+)[a-z0-9]+)*(\/[a-z0
 // ValidateName reports whether name matches the OCI repository name grammar.
 func ValidateName(name string) error {
 	if name == "" || !namePattern.MatchString(name) {
-		return fmt.Errorf("%w: %s", ErrNameInvalid, name)
+		return fmt.Errorf("%w: %s", ocierror.ErrNameInvalid, name)
 	}
 
 	return nil

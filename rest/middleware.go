@@ -42,7 +42,7 @@ func splitNamespacedPath(urlPath string) (string, string, bool) {
 
 // withNamespace parses the /v2/{name} prefix from the URL, validates the
 // repository name, stores it in the request context.
-func withNamespace(_ *RegistryHandler, next http.Handler) http.Handler {
+func withNamespace(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		name, tail, ok := splitNamespacedPath(r.URL.Path)
 		if !ok {

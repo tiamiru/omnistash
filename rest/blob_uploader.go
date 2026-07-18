@@ -10,7 +10,7 @@ import (
 )
 
 // handlePostBlobUploads implements POST /v2/{name}/blobs/uploads/.
-// Supports cross-repo mount, monolithic upload, amd multi-part uploads.
+// Supports cross-repo mount, monolithic upload, and multi-part uploads.
 func (h *RegistryHandler) handlePostBlobUploads(w http.ResponseWriter, r *http.Request) {
 	name := repoName(r)
 	q := r.URL.Query()
@@ -34,7 +34,7 @@ func (h *RegistryHandler) handlePostBlobUploads(w http.ResponseWriter, r *http.R
 }
 
 func (h *RegistryHandler) handleStartUpload(w http.ResponseWriter, r *http.Request, name string) {
-	uploadID, err := h.blobUpload.InitiateUpload(r.Context(), name)
+	uploadID, err := h.blob.InitiateUpload(r.Context(), name)
 	if err != nil {
 		h.registryErrToHTTP(w, "handleStartUpload", err)
 
@@ -66,7 +66,7 @@ func (h *RegistryHandler) handleMonolithicUpload(
 		return
 	}
 
-	err = h.blobUpload.MonolithicUpload(r.Context(), name, d, size, r.Body)
+	err = h.blob.MonolithicUpload(r.Context(), name, d, size, r.Body)
 	if err != nil {
 		h.registryErrToHTTP(w, "handleMonolithicUpload", err)
 
@@ -85,7 +85,7 @@ func (h *RegistryHandler) handleMountBlob(
 ) {
 	d := digest.Digest(digestStr)
 
-	uploadID, mounted, err := h.blobUpload.MountBlob(r.Context(), sourceName, targetName, d)
+	uploadID, mounted, err := h.blob.MountBlob(r.Context(), sourceName, targetName, d)
 	if err != nil {
 		h.registryErrToHTTP(w, "handleMountBlob", err)
 
@@ -109,7 +109,7 @@ func (h *RegistryHandler) handleGetBlobUpload(w http.ResponseWriter, r *http.Req
 	name := repoName(r)
 	uploadID := r.PathValue("uuid")
 
-	offset, err := h.blobUpload.GetUploadStatus(r.Context(), name, uploadID)
+	offset, err := h.blob.GetUploadStatus(r.Context(), name, uploadID)
 	if err != nil {
 		h.registryErrToHTTP(w, "handleGetBlobUpload", err)
 
@@ -140,7 +140,7 @@ func (h *RegistryHandler) handlePatchBlobUpload(w http.ResponseWriter, r *http.R
 		offset = first
 	}
 
-	newOffset, err := h.blobUpload.AppendChunk(r.Context(), name, uploadID, offset, r.Body)
+	newOffset, err := h.blob.AppendChunk(r.Context(), name, uploadID, offset, r.Body)
 	if err != nil {
 		h.registryErrToHTTP(w, "handlePatchBlobUpload", err)
 
@@ -182,7 +182,7 @@ func (h *RegistryHandler) handlePutBlobUpload(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	err := h.blobUpload.CommitUpload(r.Context(), name, uploadID, d, finalChunk)
+	err := h.blob.CommitUpload(r.Context(), name, uploadID, d, finalChunk)
 	if err != nil {
 		h.registryErrToHTTP(w, "handlePutBlobUpload", err)
 
@@ -199,7 +199,7 @@ func (h *RegistryHandler) handleDeleteBlobUpload(w http.ResponseWriter, r *http.
 	name := repoName(r)
 	uploadID := r.PathValue("uuid")
 
-	err := h.blobUpload.CancelUpload(r.Context(), name, uploadID)
+	err := h.blob.CancelUpload(r.Context(), name, uploadID)
 	if err != nil {
 		h.registryErrToHTTP(w, "handleDeleteBlobUpload", err)
 

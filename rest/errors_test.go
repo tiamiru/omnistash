@@ -8,8 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/tiamiru/omnistash/internal/blob"
-	"github.com/tiamiru/omnistash/internal/namespace"
+	"github.com/tiamiru/omnistash/internal/ocierror"
 )
 
 var errUnexpected = errors.New("unexpected failure")
@@ -25,55 +24,55 @@ func TestErrToStatusCode(t *testing.T) {
 	}{
 		{
 			name:       "happy path: converts ErrNameInvalid to 400 NAME_INVALID",
-			err:        namespace.ErrNameInvalid,
+			err:        ocierror.ErrNameInvalid,
 			wantStatus: http.StatusBadRequest,
 			wantCode:   ociCodeNameInvalid,
 		},
 		{
 			name:       "happy path: converts ErrDigestInvalid to 400 DIGEST_INVALID",
-			err:        blob.ErrDigestInvalid,
+			err:        ocierror.ErrDigestInvalid,
 			wantStatus: http.StatusBadRequest,
 			wantCode:   ociCodeDigestInvalid,
 		},
 		{
 			name:       "happy path: converts ErrSizeInvalid to 400 SIZE_INVALID",
-			err:        blob.ErrSizeInvalid,
+			err:        ocierror.ErrSizeInvalid,
 			wantStatus: http.StatusBadRequest,
 			wantCode:   ociCodeSizeInvalid,
 		},
 		{
 			name:       "happy path: converts ErrNameUnknown to 404 NAME_UNKNOWN",
-			err:        namespace.ErrNameUnknown,
+			err:        ocierror.ErrNameUnknown,
 			wantStatus: http.StatusNotFound,
 			wantCode:   ociCodeNameUnknown,
 		},
 		{
 			name:       "happy path: converts ErrBlobUnknown to 404 BLOB_UNKNOWN",
-			err:        blob.ErrBlobUnknown,
+			err:        ocierror.ErrBlobUnknown,
 			wantStatus: http.StatusNotFound,
 			wantCode:   ociCodeBlobUnknown,
 		},
 		{
 			name:       "happy path: converts wrapped ErrBlobUnknown to 404 BLOB_UNKNOWN",
-			err:        fmt.Errorf("Service.DeleteBlob: %w", blob.ErrBlobUnknown),
+			err:        fmt.Errorf("Service.DeleteBlob: %w", ocierror.ErrBlobUnknown),
 			wantStatus: http.StatusNotFound,
 			wantCode:   ociCodeBlobUnknown,
 		},
 		{
 			name:       "happy path: converts ErrBlobUploadUnknown to 404 BLOB_UPLOAD_UNKNOWN",
-			err:        blob.ErrBlobUploadUnknown,
+			err:        ocierror.ErrBlobUploadUnknown,
 			wantStatus: http.StatusNotFound,
 			wantCode:   ociCodeBlobUploadUnknown,
 		},
 		{
 			name:       "happy path: converts ErrNameExists to 409 NAME_EXISTS",
-			err:        namespace.ErrNameExists,
+			err:        ocierror.ErrNameExists,
 			wantStatus: http.StatusConflict,
 			wantCode:   ociCodeNameExists,
 		},
 		{
 			name:       "happy path: converts wrapped ErrNameExists to 409 NAME_EXISTS",
-			err:        fmt.Errorf("Service.CreateNamespace: %w", namespace.ErrNameExists),
+			err:        fmt.Errorf("Service.CreateNamespace: %w", ocierror.ErrNameExists),
 			wantStatus: http.StatusConflict,
 			wantCode:   ociCodeNameExists,
 		},

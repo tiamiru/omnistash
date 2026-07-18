@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,15 +10,8 @@ import (
 	"github.com/opencontainers/go-digest"
 
 	"github.com/tiamiru/omnistash/internal/logtag"
+	"github.com/tiamiru/omnistash/internal/ocierror"
 )
-
-// HandleBaseCheck implements GET /v2/.
-func (h *RegistryHandler) HandleBaseCheck(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	_, _ = w.Write([]byte("{}"))
-}
 
 // handleHeadBlob implements HEAD /v2/{name}/blobs/{digest}.
 func (h *RegistryHandler) handleHeadBlob(w http.ResponseWriter, r *http.Request) {
@@ -102,19 +96,26 @@ func (h *RegistryHandler) serveRangeBlob(
 	digestStr string,
 	first, last int64,
 ) {
-	totalSize, err := h.blob.StatBlob(r.Context(), name, d)
+	rc, totalSize, err := h.blob.GetBlobRange(r.Context(), name, d, first, last)
 	if err != nil {
+		if errors.Is(err, ocierror.ErrRangeNotSatisfiable) {
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", totalSize))
+			w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+
+			return
+		}
+
 		h.registryErrToHTTP(w, "serveRangeBlob", err)
 
 		return
 	}
 
-	if last >= totalSize {
-		w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", totalSize))
-		w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
-
-		return
-	}
+	defer func() {
+		closeErr := rc.Close()
+		if closeErr != nil {
+			h.logger.Warn("serveRangeBlob: close reader", logtag.Err(closeErr))
+		}
+	}()
 
 	partialSize := last - first + 1
 
@@ -123,7 +124,7 @@ func (h *RegistryHandler) serveRangeBlob(
 	w.Header().Set("Docker-Content-Digest", digestStr)
 	w.WriteHeader(http.StatusPartialContent)
 
-	_, err = h.blob.GetBlobRange(r.Context(), name, d, first, last, w)
+	_, err = io.Copy(w, rc)
 	if err != nil {
 		h.logger.Warn("serveRangeBlob: write response", logtag.Err(err))
 	}

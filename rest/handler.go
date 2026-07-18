@@ -12,18 +12,16 @@ import (
 const maxNamespaceRequestBytes = 4 * 1024
 
 type RegistryHandler struct {
-	health     *health.Checker
-	namespace  NamespaceService
-	blob       BlobService
-	blobUpload BlobUploadService
-	logger     *slog.Logger
+	health    *health.Checker
+	namespace NamespaceService
+	blob      BlobService
+	logger    *slog.Logger
 }
 
 func NewRegistryHandler(
 	logger *slog.Logger,
 	ns NamespaceService,
 	blobSvc BlobService,
-	blobUploadSvc BlobUploadService,
 	version, commit, date string,
 ) *RegistryHandler {
 	if logger == nil {
@@ -31,12 +29,19 @@ func NewRegistryHandler(
 	}
 
 	return &RegistryHandler{
-		health:     health.NewChecker(version, commit, date),
-		namespace:  ns,
-		blob:       blobSvc,
-		blobUpload: blobUploadSvc,
-		logger:     logger,
+		health:    health.NewChecker(version, commit, date),
+		namespace: ns,
+		blob:      blobSvc,
+		logger:    logger,
 	}
+}
+
+// HandleBaseCheck implements GET /v2/.
+func (h *RegistryHandler) HandleBaseCheck(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	_, _ = w.Write([]byte("{}"))
 }
 
 // HandleHealth implements GET /health.

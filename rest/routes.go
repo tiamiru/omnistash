@@ -13,7 +13,7 @@ func setupRoutes(mux *http.ServeMux, h *RegistryHandler) {
 	mux.HandleFunc("GET /v2/{$}", h.HandleBaseCheck)
 
 	ociRouter := buildOCIRouter(h)
-	v2Handler := withNamespace(h, ociRouter)
+	v2Handler := withNamespace(ociRouter)
 
 	mux.Handle("/v2/{rest...}", v2Handler)
 }

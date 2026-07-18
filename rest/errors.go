@@ -6,9 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/tiamiru/omnistash/internal/blob"
 	"github.com/tiamiru/omnistash/internal/logtag"
-	"github.com/tiamiru/omnistash/internal/namespace"
+	"github.com/tiamiru/omnistash/internal/ocierror"
 )
 
 var (
@@ -86,21 +85,21 @@ func (h *RegistryHandler) registryErrToHTTPNoBody(w http.ResponseWriter, caller 
 
 func errToStatusCode(err error) (int, string) {
 	switch {
-	case errors.Is(err, namespace.ErrNameExists):
+	case errors.Is(err, ocierror.ErrNameExists):
 		return http.StatusConflict, ociCodeNameExists
-	case errors.Is(err, namespace.ErrNameInvalid):
+	case errors.Is(err, ocierror.ErrNameInvalid):
 		return http.StatusBadRequest, ociCodeNameInvalid
-	case errors.Is(err, namespace.ErrNameUnknown):
+	case errors.Is(err, ocierror.ErrNameUnknown):
 		return http.StatusNotFound, ociCodeNameUnknown
-	case errors.Is(err, blob.ErrDigestInvalid):
+	case errors.Is(err, ocierror.ErrDigestInvalid):
 		return http.StatusBadRequest, ociCodeDigestInvalid
-	case errors.Is(err, blob.ErrSizeInvalid):
+	case errors.Is(err, ocierror.ErrSizeInvalid):
 		return http.StatusBadRequest, ociCodeSizeInvalid
-	case errors.Is(err, blob.ErrBlobUnknown):
+	case errors.Is(err, ocierror.ErrBlobUnknown):
 		return http.StatusNotFound, ociCodeBlobUnknown
-	case errors.Is(err, blob.ErrBlobUploadUnknown):
+	case errors.Is(err, ocierror.ErrBlobUploadUnknown):
 		return http.StatusNotFound, ociCodeBlobUploadUnknown
-	case errors.Is(err, blob.ErrRangeNotSatisfiable):
+	case errors.Is(err, ocierror.ErrRangeNotSatisfiable):
 		return http.StatusRequestedRangeNotSatisfiable, ociCodeBlobUploadInvalid
 	case errors.Is(err, errRangeHeaderInvalid):
 		return http.StatusBadRequest, ociCodeBlobUploadInvalid
