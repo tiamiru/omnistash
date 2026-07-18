@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/tiamiru/omnistash/internal/metastore"
+	"github.com/tiamiru/omnistash/internal/ocierror"
 )
 
 // Namespace is the domain representation of a namespace.
@@ -35,7 +36,7 @@ func (s *Service) CreateNamespace(ctx context.Context, name string) (Namespace, 
 		row, createErr := tx.CreateNamespace(ctx, name)
 		if createErr != nil {
 			if errors.Is(createErr, metastore.ErrNameExists) {
-				return fmt.Errorf("%w: name=%s", ErrNameExists, name)
+				return fmt.Errorf("%w: name=%s", ocierror.ErrNameExists, name)
 			}
 
 			return createErr
@@ -64,7 +65,7 @@ func (s *Service) DeleteNamespace(ctx context.Context, name string) (Namespace, 
 		row, deleteErr := tx.DeleteNamespace(ctx, name)
 		if deleteErr != nil {
 			if errors.Is(deleteErr, metastore.ErrNameUnknown) {
-				return fmt.Errorf("%w: name=%s", ErrNameUnknown, name)
+				return fmt.Errorf("%w: name=%s", ocierror.ErrNameUnknown, name)
 			}
 
 			return deleteErr

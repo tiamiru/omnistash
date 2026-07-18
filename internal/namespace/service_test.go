@@ -11,6 +11,7 @@ import (
 
 	"github.com/tiamiru/omnistash/internal/metastore"
 	"github.com/tiamiru/omnistash/internal/namespace"
+	"github.com/tiamiru/omnistash/internal/ocierror"
 	mockmeta "github.com/tiamiru/omnistash/internal/testutil/mock"
 )
 
@@ -31,12 +32,12 @@ func TestService_CreateNamespace(t *testing.T) {
 		{
 			name:      "error path: empty name",
 			namespace: "",
-			wantErr:   namespace.ErrNameInvalid,
+			wantErr:   ocierror.ErrNameInvalid,
 		},
 		{
 			name:      "error path: name with uppercase",
 			namespace: "MyRepo",
-			wantErr:   namespace.ErrNameInvalid,
+			wantErr:   ocierror.ErrNameInvalid,
 		},
 		{
 			name:      "error path: store returns error",
@@ -56,7 +57,7 @@ func TestService_CreateNamespace(t *testing.T) {
 				ms.Tx.On("CreateNamespace", mock.Anything, "myrepo").
 					Return(metastore.NamespaceRow{}, metastore.ErrNameExists)
 			},
-			wantErr: namespace.ErrNameExists,
+			wantErr: ocierror.ErrNameExists,
 		},
 		{
 			name:      "happy path: creates namespace",
@@ -118,12 +119,12 @@ func TestService_DeleteNamespace(t *testing.T) {
 		{
 			name:      "error path: empty name",
 			namespace: "",
-			wantErr:   namespace.ErrNameInvalid,
+			wantErr:   ocierror.ErrNameInvalid,
 		},
 		{
 			name:      "error path: name with spaces",
 			namespace: "my repo",
-			wantErr:   namespace.ErrNameInvalid,
+			wantErr:   ocierror.ErrNameInvalid,
 		},
 		{
 			name:      "error path: store returns error",
@@ -143,7 +144,7 @@ func TestService_DeleteNamespace(t *testing.T) {
 				ms.Tx.On("DeleteNamespace", mock.Anything, "myrepo").
 					Return(metastore.NamespaceRow{}, metastore.ErrNameUnknown)
 			},
-			wantErr: namespace.ErrNameUnknown,
+			wantErr: ocierror.ErrNameUnknown,
 		},
 		{
 			name:      "happy path: deletes namespace",
