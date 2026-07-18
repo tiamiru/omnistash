@@ -170,20 +170,12 @@ func (s *UploadService) GetUploadStatus(ctx context.Context, name, uploadID stri
 
 // CancelUpload discards the upload session.
 func (s *UploadService) CancelUpload(ctx context.Context, name, uploadID string) error {
-	offset, err := s.blobs.GetBlobUploadOffset(name, uploadID)
+	err := s.blobs.CancelBlobUpload(name, uploadID)
 	if err != nil {
 		if errors.Is(err, blobstore.ErrBlobUploadUnknown) {
 			return fmt.Errorf("CancelUpload: %w", ErrBlobUploadUnknown)
 		}
 
-		return fmt.Errorf("CancelUpload: %w", err)
-	}
-
-	// offset check just validates the session exists; ignore the value
-	_ = offset
-
-	err = s.blobs.CancelBlobUpload(name, uploadID)
-	if err != nil {
 		return fmt.Errorf("CancelUpload: %w", err)
 	}
 
@@ -208,31 +200,12 @@ func (s *UploadService) MountBlob(
 		return "", false, fmt.Errorf("MountBlob: %w", err)
 	}
 
-	var (
-		sourceSize  int64
-		sourceFound bool
-	)
-
-	_ = s.meta.Atomic(ctx, func(ctx context.Context, tx metastore.TxOps) error {
-		var statErr error
-
-		sourceSize, statErr = tx.StatNamespaceBlob(ctx, sourceName, d)
-		if errors.Is(statErr, metastore.ErrBlobUnknown) {
-			sourceFound = false
-
-			return nil
-		}
-		if statErr != nil {
-			return statErr
-		}
-
-		sourceFound = true
-
-		return nil
-	})
-
-	if !sourceFound {
+	sourceSize, err := s.statSourceBlob(ctx, sourceName, d)
+	if errors.Is(err, metastore.ErrBlobUnknown) {
 		return s.startFallbackUpload(targetName)
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("MountBlob: %w", err)
 	}
 
 	rc, _, readErr := s.blobs.GetBlob(sourceName, d)
@@ -252,6 +225,19 @@ func (s *UploadService) MountBlob(
 	}
 
 	return "", true, nil
+}
+
+func (s *UploadService) statSourceBlob(ctx context.Context, sourceName string, d digest.Digest) (int64, error) {
+	var size int64
+
+	err := s.meta.Atomic(ctx, func(ctx context.Context, tx metastore.TxOps) error {
+		var statErr error
+		size, statErr = tx.StatNamespaceBlob(ctx, sourceName, d)
+
+		return statErr
+	})
+
+	return size, err
 }
 
 func (s *UploadService) appendFinalChunk(name, uploadID string, r io.Reader) error {

@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/tiamiru/omnistash/internal/blob"
+	fsblobstore "github.com/tiamiru/omnistash/internal/blobstore/fs"
 	"github.com/tiamiru/omnistash/internal/logtag"
 	"github.com/tiamiru/omnistash/internal/metastore/sqlite"
 	"github.com/tiamiru/omnistash/internal/namespace"
@@ -29,8 +31,9 @@ var (
 )
 
 type config struct {
-	addr         string
-	metastoreDSN string
+	addr          string
+	metastoreDSN  string
+	blobstorePath string
 }
 
 func parseConfig(args []string) (config, error) {
@@ -39,6 +42,7 @@ func parseConfig(args []string) (config, error) {
 	var cfg config
 	fs.StringVar(&cfg.addr, "addr", ":10080", "listen address")
 	fs.StringVar(&cfg.metastoreDSN, "metastore-dsn", "omnistash.db", "SQLite database path")
+	fs.StringVar(&cfg.blobstorePath, "blobstore-path", "blobs", "root directory for blob storage")
 
 	err := fs.Parse(args)
 	if err != nil {
@@ -82,11 +86,15 @@ func run(logger *slog.Logger, cfg config) error {
 
 	ns := namespace.NewService(meta)
 
+	blobStore := fsblobstore.NewFilesystemBlobStore(cfg.blobstorePath, fsblobstore.WithLogger(logger))
+	blobSvc := blob.NewService(meta, blobStore)
+	blobUploadSvc := blob.NewUploadService(meta, blobStore)
+
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(signalChan)
 
-	handler := rest.NewRegistryHandler(logger, ns, version, commit, date)
+	handler := rest.NewRegistryHandler(logger, ns, blobSvc, blobUploadSvc, version, commit, date)
 	server := rest.NewServer(handler, cfg.addr)
 
 	logger.Info("main: server started", slog.String("addr", server.Addr))
