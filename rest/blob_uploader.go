@@ -1,0 +1,214 @@
+package rest
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"strconv"
+
+	"github.com/opencontainers/go-digest"
+)
+
+// handlePostBlobUploads implements POST /v2/{name}/blobs/uploads/.
+// Supports cross-repo mount, monolithic upload, amd multi-part uploads.
+func (h *RegistryHandler) handlePostBlobUploads(w http.ResponseWriter, r *http.Request) {
+	name := repoName(r)
+	q := r.URL.Query()
+
+	mountDigest := q.Get("mount")
+	if mountDigest != "" {
+		sourceNs := q.Get("from")
+		h.handleMountBlob(w, r, name, sourceNs, mountDigest)
+
+		return
+	}
+
+	digestParam := q.Get("digest")
+	if digestParam != "" {
+		h.handleMonolithicUpload(w, r, name, digestParam)
+
+		return
+	}
+
+	h.handleStartUpload(w, r, name)
+}
+
+func (h *RegistryHandler) handleStartUpload(w http.ResponseWriter, r *http.Request, name string) {
+	uploadID, err := h.blobUpload.InitiateUpload(r.Context(), name)
+	if err != nil {
+		h.registryErrToHTTP(w, "handleStartUpload", err)
+
+		return
+	}
+
+	w.Header().Set("Location", uploadSessionURL(name, uploadID))
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (h *RegistryHandler) handleMonolithicUpload(
+	w http.ResponseWriter,
+	r *http.Request,
+	name, digestStr string,
+) {
+	d := digest.Digest(digestStr)
+
+	clStr := r.Header.Get("Content-Length")
+	size, err := strconv.ParseInt(clStr, 10, 64)
+	if err != nil || size < 0 {
+		h.writeOCIError(
+			w,
+			"handleMonolithicUpload",
+			http.StatusBadRequest,
+			ociCodeSizeInvalid,
+			"invalid Content-Length",
+		)
+
+		return
+	}
+
+	err = h.blobUpload.MonolithicUpload(r.Context(), name, d, size, r.Body)
+	if err != nil {
+		h.registryErrToHTTP(w, "handleMonolithicUpload", err)
+
+		return
+	}
+
+	w.Header().Set("Location", blobURL(name, digestStr))
+	w.Header().Set("Docker-Content-Digest", digestStr)
+	w.WriteHeader(http.StatusCreated)
+}
+
+func (h *RegistryHandler) handleMountBlob(
+	w http.ResponseWriter,
+	r *http.Request,
+	targetName, sourceName, digestStr string,
+) {
+	d := digest.Digest(digestStr)
+
+	uploadID, mounted, err := h.blobUpload.MountBlob(r.Context(), sourceName, targetName, d)
+	if err != nil {
+		h.registryErrToHTTP(w, "handleMountBlob", err)
+
+		return
+	}
+
+	if mounted {
+		w.Header().Set("Location", blobURL(targetName, digestStr))
+		w.Header().Set("Docker-Content-Digest", digestStr)
+		w.WriteHeader(http.StatusCreated)
+
+		return
+	}
+
+	w.Header().Set("Location", uploadSessionURL(targetName, uploadID))
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// handleGetBlobUpload implements GET /v2/{name}/blobs/uploads/{uuid}.
+func (h *RegistryHandler) handleGetBlobUpload(w http.ResponseWriter, r *http.Request) {
+	name := repoName(r)
+	uploadID := r.PathValue("uuid")
+
+	offset, err := h.blobUpload.GetUploadStatus(r.Context(), name, uploadID)
+	if err != nil {
+		h.registryErrToHTTP(w, "handleGetBlobUpload", err)
+
+		return
+	}
+
+	w.Header().Set("Range", fmt.Sprintf("0-%d", max(0, offset-1)))
+	w.Header().Set("Location", uploadSessionURL(name, uploadID))
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handlePatchBlobUpload implements PATCH /v2/{name}/blobs/uploads/{uuid}.
+func (h *RegistryHandler) handlePatchBlobUpload(w http.ResponseWriter, r *http.Request) {
+	name := repoName(r)
+	uploadID := r.PathValue("uuid")
+
+	var offset int64
+
+	contentRangeHeader := r.Header.Get("Content-Range")
+	if contentRangeHeader != "" {
+		first, _, err := parseContentRangeHeader(contentRangeHeader)
+		if err != nil {
+			h.registryErrToHTTP(w, "handlePatchBlobUpload", err)
+
+			return
+		}
+
+		offset = first
+	}
+
+	newOffset, err := h.blobUpload.AppendChunk(r.Context(), name, uploadID, offset, r.Body)
+	if err != nil {
+		h.registryErrToHTTP(w, "handlePatchBlobUpload", err)
+
+		return
+	}
+
+	w.Header().Set("Location", uploadSessionURL(name, uploadID))
+	w.Header().Set("Range", fmt.Sprintf("0-%d", newOffset-1))
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// handlePutBlobUpload implements PUT /v2/{name}/blobs/uploads/{uuid}?digest={digest}.
+func (h *RegistryHandler) handlePutBlobUpload(w http.ResponseWriter, r *http.Request) {
+	name := repoName(r)
+	uploadID := r.PathValue("uuid")
+	digestStr := r.URL.Query().Get("digest")
+
+	if digestStr == "" {
+		h.writeOCIError(
+			w,
+			"handlePutBlobUpload",
+			http.StatusBadRequest,
+			ociCodeDigestInvalid,
+			"digest query parameter required",
+		)
+
+		return
+	}
+
+	d := digest.Digest(digestStr)
+
+	// If Content-Length > 0 the PUT body is a final chunk.
+	var finalChunk io.Reader
+	contentLengthStr := r.Header.Get("Content-Length")
+	if contentLengthStr != "" {
+		contentLength, err := strconv.ParseInt(contentLengthStr, 10, 64)
+		if err == nil && contentLength > 0 {
+			finalChunk = r.Body
+		}
+	}
+
+	err := h.blobUpload.CommitUpload(r.Context(), name, uploadID, d, finalChunk)
+	if err != nil {
+		h.registryErrToHTTP(w, "handlePutBlobUpload", err)
+
+		return
+	}
+
+	w.Header().Set("Location", blobURL(name, digestStr))
+	w.Header().Set("Docker-Content-Digest", digestStr)
+	w.WriteHeader(http.StatusCreated)
+}
+
+// handleDeleteBlobUpload implements DELETE /v2/{name}/blobs/uploads/{uuid}.
+func (h *RegistryHandler) handleDeleteBlobUpload(w http.ResponseWriter, r *http.Request) {
+	name := repoName(r)
+	uploadID := r.PathValue("uuid")
+
+	err := h.blobUpload.CancelUpload(r.Context(), name, uploadID)
+	if err != nil {
+		h.registryErrToHTTP(w, "handleDeleteBlobUpload", err)
+
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func uploadSessionURL(name, uploadID string) string {
+	return fmt.Sprintf("/v2/%s/blobs/uploads/%s", name, uploadID)
+}

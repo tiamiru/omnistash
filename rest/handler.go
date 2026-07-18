@@ -12,20 +12,30 @@ import (
 const maxNamespaceRequestBytes = 4 * 1024
 
 type RegistryHandler struct {
-	health    *health.Checker
-	namespace NamespaceService
-	logger    *slog.Logger
+	health     *health.Checker
+	namespace  NamespaceService
+	blob       BlobService
+	blobUpload BlobUploadService
+	logger     *slog.Logger
 }
 
-func NewRegistryHandler(logger *slog.Logger, ns NamespaceService, version, commit, date string) *RegistryHandler {
+func NewRegistryHandler(
+	logger *slog.Logger,
+	ns NamespaceService,
+	blobSvc BlobService,
+	blobUploadSvc BlobUploadService,
+	version, commit, date string,
+) *RegistryHandler {
 	if logger == nil {
 		panic("NewRegistryHandler: logger must not be nil")
 	}
 
 	return &RegistryHandler{
-		health:    health.NewChecker(version, commit, date),
-		namespace: ns,
-		logger:    logger,
+		health:     health.NewChecker(version, commit, date),
+		namespace:  ns,
+		blob:       blobSvc,
+		blobUpload: blobUploadSvc,
+		logger:     logger,
 	}
 }
 
@@ -82,7 +92,7 @@ func (h *RegistryHandler) HandleCreateNamespace(w http.ResponseWriter, r *http.R
 			w,
 			"HandleCreateNamespace",
 			http.StatusInternalServerError,
-			ociCodeUnsupported,
+			ociCodeInternalError,
 			"internal server error",
 		)
 
@@ -120,7 +130,7 @@ func (h *RegistryHandler) HandleDeleteNamespace(w http.ResponseWriter, r *http.R
 			w,
 			"HandleDeleteNamespace",
 			http.StatusInternalServerError,
-			ociCodeUnsupported,
+			ociCodeInternalError,
 			"internal server error",
 		)
 

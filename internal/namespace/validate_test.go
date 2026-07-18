@@ -38,7 +38,7 @@ func TestValidateName(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := validateName(tc.input)
+			err := ValidateName(tc.input)
 
 			if tc.wantErr != nil {
 				require.ErrorIs(t, err, tc.wantErr)

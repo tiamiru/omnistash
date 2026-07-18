@@ -25,7 +25,7 @@ func NewService(meta metastore.MetadataStore) *Service {
 }
 
 func (s *Service) CreateNamespace(ctx context.Context, name string) (Namespace, error) {
-	err := validateName(name)
+	err := ValidateName(name)
 	if err != nil {
 		return Namespace{}, fmt.Errorf("CreateNamespace: name=%s: %w", name, err)
 	}
@@ -54,7 +54,7 @@ func (s *Service) CreateNamespace(ctx context.Context, name string) (Namespace, 
 }
 
 func (s *Service) DeleteNamespace(ctx context.Context, name string) (Namespace, error) {
-	err := validateName(name)
+	err := ValidateName(name)
 	if err != nil {
 		return Namespace{}, fmt.Errorf("DeleteNamespace: name=%s: %w", name, err)
 	}
