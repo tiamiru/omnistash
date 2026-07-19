@@ -29,6 +29,10 @@ const (
 	ociCodeDigestInvalid     = "DIGEST_INVALID"
 	ociCodeSizeInvalid       = "SIZE_INVALID"
 	ociCodeUnsupported       = "UNSUPPORTED"
+
+	ociCodeManifestUnknown     = "MANIFEST_UNKNOWN"
+	ociCodeManifestInvalid     = "MANIFEST_INVALID"
+	ociCodeManifestBlobUnknown = "MANIFEST_BLOB_UNKNOWN"
 )
 
 type ociErrorEntry struct {
@@ -108,6 +112,12 @@ func errToStatusCode(err error) (int, string) {
 		return http.StatusBadRequest, ociCodeBlobUploadInvalid
 	case errors.Is(err, errContentRangeHeaderInvalid):
 		return http.StatusBadRequest, ociCodeBlobUploadInvalid
+	case errors.Is(err, ocierror.ErrManifestUnknown):
+		return http.StatusNotFound, ociCodeManifestUnknown
+	case errors.Is(err, ocierror.ErrManifestInvalid):
+		return http.StatusBadRequest, ociCodeManifestInvalid
+	case errors.Is(err, ocierror.ErrManifestBlobUnknown):
+		return http.StatusBadRequest, ociCodeManifestBlobUnknown
 	default:
 		return http.StatusInternalServerError, ociCodeInternalError
 	}
