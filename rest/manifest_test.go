@@ -45,7 +45,7 @@ func TestHandleGetManifest(t *testing.T) {
 	assert.Equal(t, stub.FixtureMediaType, res.Header.Get("Content-Type"))
 	assert.Equal(t, "512", res.Header.Get("Content-Length"))
 	assert.Equal(t, stub.FixtureDigest.String(), res.Header.Get("Docker-Content-Digest"))
-	assert.Equal(t, stub.FixtureBody, w.Body.Bytes())
+	assert.Equal(t, stub.FixtureBody(), w.Body.Bytes())
 	assert.Equal(t, []string{"GetManifest"}, svc.Calls)
 }
 
@@ -149,8 +149,8 @@ func TestHandlePutManifest(t *testing.T) {
 
 			assert.Equal(t, stub.FixtureLocation, res.Header.Get("Location"))
 			assert.Equal(t, stub.FixtureDigest.String(), res.Header.Get("Docker-Content-Digest"))
-			assert.Equal(t, tc.wantSubject, res.Header.Get(headerOCISubject))
-			assert.Equal(t, tc.wantOCITags, res.Header.Values(headerOCITag))
+			assert.Equal(t, tc.wantSubject, res.Header.Get(headerOCISubject)) //nolint:canonicalheader
+			assert.Equal(t, tc.wantOCITags, res.Header.Values(headerOCITag))  //nolint:canonicalheader
 		})
 	}
 }

@@ -11,15 +11,15 @@ import (
 )
 
 const (
-	FixtureMediaType = "application/vnd.oci.image.manifest.v1+json"
-	FixtureSizeBytes = int64(512)
+	FixtureMediaType               = "application/vnd.oci.image.manifest.v1+json"
+	FixtureSizeBytes               = int64(512)
+	FixtureDigest    digest.Digest = "sha256:a948904f2f0f479b8f936f443f8fc38c7f8b532c64fd9b5f813f95e4f0a6a8b"
+	FixtureLocation                = "/v2/myrepo/manifests/" + string(FixtureDigest)
 )
 
-var (
-	FixtureBody     = []byte(`{"schemaVersion":2}`)
-	FixtureDigest   = digest.NewDigestFromEncoded(digest.SHA256, "a948904f2f0f479b8f936f443f8fc38c7f8b532c64fd9b5f813f95e4f0a6a8b")
-	FixtureLocation = "/v2/myrepo/manifests/" + FixtureDigest.String()
-)
+func FixtureBody() []byte {
+	return []byte(`{"schemaVersion":2}`)
+}
 
 // ManifestService is a stub implementation of rest.ManifestService that always succeeds.
 // Set Subject and Tags to control optional fields in PutManifest responses.
@@ -36,15 +36,17 @@ func NewManifestService() *ManifestService {
 
 func (s *ManifestService) GetManifest(_ context.Context, _, _ string) (manifest.ManifestInfo, io.ReadCloser, error) {
 	s.Calls = append(s.Calls, "GetManifest")
+
 	return manifest.ManifestInfo{
 		Digest:    FixtureDigest,
 		MediaType: FixtureMediaType,
 		Size:      FixtureSizeBytes,
-	}, io.NopCloser(bytes.NewReader(FixtureBody)), nil
+	}, io.NopCloser(bytes.NewReader(FixtureBody())), nil
 }
 
 func (s *ManifestService) HeadManifest(_ context.Context, _, _ string) (manifest.ManifestInfo, error) {
 	s.Calls = append(s.Calls, "HeadManifest")
+
 	return manifest.ManifestInfo{
 		Digest:    FixtureDigest,
 		MediaType: FixtureMediaType,
@@ -54,6 +56,7 @@ func (s *ManifestService) HeadManifest(_ context.Context, _, _ string) (manifest
 
 func (s *ManifestService) PutManifest(_ context.Context, _, _, _ string, _ []byte) (manifest.PutResult, error) {
 	s.Calls = append(s.Calls, "PutManifest")
+
 	return manifest.PutResult{
 		Digest:   FixtureDigest,
 		Location: FixtureLocation,
@@ -70,6 +73,7 @@ func (s *ManifestService) PutManifestWithTags(
 	_ []byte,
 ) (manifest.PutResult, error) {
 	s.Calls = append(s.Calls, "PutManifestWithTags")
+
 	return manifest.PutResult{
 		Digest:   FixtureDigest,
 		Location: FixtureLocation,
@@ -80,5 +84,6 @@ func (s *ManifestService) PutManifestWithTags(
 
 func (s *ManifestService) DeleteManifest(_ context.Context, _, _ string) error {
 	s.Calls = append(s.Calls, "DeleteManifest")
+
 	return nil
 }
