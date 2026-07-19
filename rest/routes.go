@@ -28,11 +28,15 @@ func buildOCIRouter(h *RegistryHandler) http.Handler {
 	mux.HandleFunc("HEAD /blobs/{digest}", h.handleHeadBlob)
 
 	mux.HandleFunc("POST /blobs/uploads/", h.handlePostBlobUploads)
-
 	mux.HandleFunc("GET /blobs/uploads/{uuid}", h.handleGetBlobUpload)
 	mux.HandleFunc("PATCH /blobs/uploads/{uuid}", h.handlePatchBlobUpload)
 	mux.HandleFunc("PUT /blobs/uploads/{uuid}", h.handlePutBlobUpload)
 	mux.HandleFunc("DELETE /blobs/uploads/{uuid}", h.handleDeleteBlobUpload)
+
+	mux.HandleFunc("GET /manifests/{reference}", h.handleGetManifest)
+	mux.HandleFunc("HEAD /manifests/{reference}", h.handleHeadManifest)
+	mux.HandleFunc("PUT /manifests/{reference}", h.handlePutManifest)
+	mux.HandleFunc("DELETE /manifests/{reference}", h.handleDeleteManifest)
 
 	return mux
 }

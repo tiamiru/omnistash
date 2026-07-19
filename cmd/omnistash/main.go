@@ -15,6 +15,7 @@ import (
 	"github.com/tiamiru/omnistash/internal/blob"
 	fsblobstore "github.com/tiamiru/omnistash/internal/blobstore/fs"
 	"github.com/tiamiru/omnistash/internal/logtag"
+	"github.com/tiamiru/omnistash/internal/manifest"
 	"github.com/tiamiru/omnistash/internal/metastore/sqlite"
 	"github.com/tiamiru/omnistash/internal/namespace"
 	"github.com/tiamiru/omnistash/rest"
@@ -89,11 +90,13 @@ func run(logger *slog.Logger, cfg config) error {
 	blobStore := fsblobstore.NewFilesystemBlobStore(cfg.blobstorePath, fsblobstore.WithLogger(logger))
 	blobSvc := blob.NewService(meta, blobStore)
 
+	manifestSvc := manifest.NewService(logger)
+
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(signalChan)
 
-	handler := rest.NewRegistryHandler(logger, ns, blobSvc, version, commit, date)
+	handler := rest.NewRegistryHandler(logger, ns, blobSvc, manifestSvc, version, commit, date)
 	server := rest.NewServer(handler, cfg.addr)
 
 	logger.Info("main: server started", slog.String("addr", server.Addr))

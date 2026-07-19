@@ -37,6 +37,8 @@ linters:
 
   exclusions:
     rules:
+    - text: '"OCI-(Tag|Subject)" is not canonical'
+      linters: [ canonicalheader ]
     - text: 'should have a package comment'
       linters: [ revive ]
     - path: '_test\.go'

@@ -15,6 +15,7 @@ type RegistryHandler struct {
 	health    *health.Checker
 	namespace NamespaceService
 	blob      BlobService
+	manifest  ManifestService
 	logger    *slog.Logger
 }
 
@@ -22,6 +23,7 @@ func NewRegistryHandler(
 	logger *slog.Logger,
 	ns NamespaceService,
 	blobSvc BlobService,
+	manifestSvc ManifestService,
 	version, commit, date string,
 ) *RegistryHandler {
 	if logger == nil {
@@ -32,6 +34,7 @@ func NewRegistryHandler(
 		health:    health.NewChecker(version, commit, date),
 		namespace: ns,
 		blob:      blobSvc,
+		manifest:  manifestSvc,
 		logger:    logger,
 	}
 }

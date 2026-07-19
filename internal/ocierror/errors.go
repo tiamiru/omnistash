@@ -12,4 +12,8 @@ var (
 	ErrSizeInvalid         = errors.New("size invalid")
 	ErrRangeNotSatisfiable = errors.New("range not satisfiable")
 	ErrUnsupported         = errors.New("unsupported")
+
+	ErrManifestUnknown     = errors.New("manifest unknown")
+	ErrManifestInvalid     = errors.New("manifest invalid")
+	ErrManifestBlobUnknown = errors.New("manifest blob unknown")
 )
