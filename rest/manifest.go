@@ -98,11 +98,11 @@ func (h *RegistryHandler) handlePutManifest(w http.ResponseWriter, r *http.Reque
 	w.Header().Set("Docker-Content-Digest", result.Digest.String())
 
 	for _, tag := range result.Tags {
-		w.Header().Add(headerOCITag, tag) //nolint:canonicalheader
+		w.Header().Add(headerOCITag, tag)
 	}
 
 	if result.Subject != nil {
-		w.Header().Set(headerOCISubject, result.Subject.String()) //nolint:canonicalheader
+		w.Header().Set(headerOCISubject, result.Subject.String())
 	}
 
 	w.WriteHeader(http.StatusCreated)
