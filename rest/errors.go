@@ -7,7 +7,12 @@ import (
 	"net/http"
 
 	"github.com/tiamiru/omnistash/internal/logtag"
-	"github.com/tiamiru/omnistash/internal/namespace"
+	"github.com/tiamiru/omnistash/internal/ocierror"
+)
+
+var (
+	errRangeHeaderInvalid        = errors.New("invalid Range header")
+	errContentRangeHeaderInvalid = errors.New("invalid Content-Range header")
 )
 
 const (
@@ -15,9 +20,15 @@ const (
 	// create a namespace that already exists.
 	ociCodeNameExists = "NAME_EXISTS"
 
-	ociCodeNameInvalid = "NAME_INVALID"
-	ociCodeNameUnknown = "NAME_UNKNOWN"
-	ociCodeUnsupported = "UNSUPPORTED"
+	ociCodeNameInvalid       = "NAME_INVALID"
+	ociCodeNameUnknown       = "NAME_UNKNOWN"
+	ociCodeInternalError     = "INTERNAL_ERROR"
+	ociCodeBlobUnknown       = "BLOB_UNKNOWN"
+	ociCodeBlobUploadUnknown = "BLOB_UPLOAD_UNKNOWN"
+	ociCodeBlobUploadInvalid = "BLOB_UPLOAD_INVALID"
+	ociCodeDigestInvalid     = "DIGEST_INVALID"
+	ociCodeSizeInvalid       = "SIZE_INVALID"
+	ociCodeUnsupported       = "UNSUPPORTED"
 )
 
 type ociErrorEntry struct {
@@ -47,19 +58,7 @@ func (h *RegistryHandler) writeOCIError(w http.ResponseWriter, caller string, st
 }
 
 func (h *RegistryHandler) registryErrToHTTP(w http.ResponseWriter, caller string, err error) {
-	var status int
-	var code string
-
-	switch {
-	case errors.Is(err, namespace.ErrNameExists):
-		status, code = http.StatusConflict, ociCodeNameExists
-	case errors.Is(err, namespace.ErrNameInvalid):
-		status, code = http.StatusBadRequest, ociCodeNameInvalid
-	case errors.Is(err, namespace.ErrNameUnknown):
-		status, code = http.StatusNotFound, ociCodeNameUnknown
-	default:
-		status, code = http.StatusInternalServerError, ociCodeUnsupported
-	}
+	status, code := errToStatusCode(err)
 
 	var clientMsg string
 	if status >= http.StatusInternalServerError {
@@ -71,4 +70,45 @@ func (h *RegistryHandler) registryErrToHTTP(w http.ResponseWriter, caller string
 	}
 
 	h.writeOCIError(w, caller, status, code, clientMsg)
+}
+
+func (h *RegistryHandler) registryErrToHTTPNoBody(w http.ResponseWriter, caller string, err error) {
+	status, _ := errToStatusCode(err)
+
+	if status >= http.StatusInternalServerError {
+		h.logger.Error(caller, logtag.Err(err))
+	} else {
+		h.logger.Warn(caller, logtag.Err(err))
+	}
+
+	w.WriteHeader(status)
+}
+
+func errToStatusCode(err error) (int, string) {
+	switch {
+	case errors.Is(err, ocierror.ErrNameExists):
+		return http.StatusConflict, ociCodeNameExists
+	case errors.Is(err, ocierror.ErrNameInvalid):
+		return http.StatusBadRequest, ociCodeNameInvalid
+	case errors.Is(err, ocierror.ErrNameUnknown):
+		return http.StatusNotFound, ociCodeNameUnknown
+	case errors.Is(err, ocierror.ErrDigestInvalid):
+		return http.StatusBadRequest, ociCodeDigestInvalid
+	case errors.Is(err, ocierror.ErrSizeInvalid):
+		return http.StatusBadRequest, ociCodeSizeInvalid
+	case errors.Is(err, ocierror.ErrUnsupported):
+		return http.StatusBadRequest, ociCodeUnsupported
+	case errors.Is(err, ocierror.ErrBlobUnknown):
+		return http.StatusNotFound, ociCodeBlobUnknown
+	case errors.Is(err, ocierror.ErrBlobUploadUnknown):
+		return http.StatusNotFound, ociCodeBlobUploadUnknown
+	case errors.Is(err, ocierror.ErrRangeNotSatisfiable):
+		return http.StatusRequestedRangeNotSatisfiable, ociCodeBlobUploadInvalid
+	case errors.Is(err, errRangeHeaderInvalid):
+		return http.StatusBadRequest, ociCodeBlobUploadInvalid
+	case errors.Is(err, errContentRangeHeaderInvalid):
+		return http.StatusBadRequest, ociCodeBlobUploadInvalid
+	default:
+		return http.StatusInternalServerError, ociCodeInternalError
+	}
 }

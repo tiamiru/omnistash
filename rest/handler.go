@@ -14,10 +14,16 @@ const maxNamespaceRequestBytes = 4 * 1024
 type RegistryHandler struct {
 	health    *health.Checker
 	namespace NamespaceService
+	blob      BlobService
 	logger    *slog.Logger
 }
 
-func NewRegistryHandler(logger *slog.Logger, ns NamespaceService, version, commit, date string) *RegistryHandler {
+func NewRegistryHandler(
+	logger *slog.Logger,
+	ns NamespaceService,
+	blobSvc BlobService,
+	version, commit, date string,
+) *RegistryHandler {
 	if logger == nil {
 		panic("NewRegistryHandler: logger must not be nil")
 	}
@@ -25,8 +31,17 @@ func NewRegistryHandler(logger *slog.Logger, ns NamespaceService, version, commi
 	return &RegistryHandler{
 		health:    health.NewChecker(version, commit, date),
 		namespace: ns,
+		blob:      blobSvc,
 		logger:    logger,
 	}
+}
+
+// HandleBaseCheck implements GET /v2/.
+func (h *RegistryHandler) HandleBaseCheck(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	_, _ = w.Write([]byte("{}"))
 }
 
 // HandleHealth implements GET /health.
@@ -82,7 +97,7 @@ func (h *RegistryHandler) HandleCreateNamespace(w http.ResponseWriter, r *http.R
 			w,
 			"HandleCreateNamespace",
 			http.StatusInternalServerError,
-			ociCodeUnsupported,
+			ociCodeInternalError,
 			"internal server error",
 		)
 
@@ -120,7 +135,7 @@ func (h *RegistryHandler) HandleDeleteNamespace(w http.ResponseWriter, r *http.R
 			w,
 			"HandleDeleteNamespace",
 			http.StatusInternalServerError,
-			ociCodeUnsupported,
+			ociCodeInternalError,
 			"internal server error",
 		)
 
