@@ -39,5 +39,5 @@ type BlobService interface {
 		ctx context.Context,
 		sourceName, targetName string,
 		d digest.Digest,
-	) (uploadID string, mounted bool, err error)
+	) error
 }

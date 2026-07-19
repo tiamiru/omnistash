@@ -13,6 +13,8 @@ import (
 	"github.com/tiamiru/omnistash/internal/ocierror"
 )
 
+var ErrMountFailed = errors.New("blob mount not available")
+
 type Service struct {
 	meta  metastore.MetadataStore
 	blobs blobstore.BlobStore
@@ -44,7 +46,12 @@ func (s *Service) GetBlob(ctx context.Context, name string, d digest.Digest) (io
 		return nil, 0, fmt.Errorf("GetBlob: %w", err)
 	}
 
-	rc, size, err := s.blobs.GetBlob(name, d)
+	size, err := s.statBlob(ctx, name, d)
+	if err != nil {
+		return nil, 0, fmt.Errorf("GetBlob: %w", err)
+	}
+
+	rc, _, err := s.blobs.GetBlob(name, d)
 	if err != nil {
 		if errors.Is(err, blobstore.ErrBlobUnknown) {
 			return nil, 0, fmt.Errorf("GetBlob: %w", ocierror.ErrBlobUnknown)

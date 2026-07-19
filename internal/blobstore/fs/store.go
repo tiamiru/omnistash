@@ -57,10 +57,7 @@ func (s *FilesystemBlobStore) PutBlob(namespace string, d digest.Digest, size in
 		return 0, fmt.Errorf("%w: namespace=%s digest=%s size=%d", blobstore.ErrSizeInvalid, namespace, d, size)
 	}
 
-	tmpPath, n, err := s.writeBlobToStaging(namespace, d, size, r)
-	if err != nil {
-		return 0, fmt.Errorf("PutBlob: namespace=%s digest=%s: %w", namespace, d, err)
-	}
+	tmpPath := buildStagingPath(s.prefix, namespace, uuid.New().String())
 
 	defer func() {
 		removeErr := removeFileIfExists(tmpPath)
@@ -68,6 +65,11 @@ func (s *FilesystemBlobStore) PutBlob(namespace string, d digest.Digest, size in
 			s.logger.Warn("PutBlob: remove staged file", logtag.Path(tmpPath), logtag.Err(removeErr))
 		}
 	}()
+
+	n, err := s.writeBlob(namespace, tmpPath, d, size, r)
+	if err != nil {
+		return 0, fmt.Errorf("PutBlob: namespace=%s digest=%s: %w", namespace, d, err)
+	}
 
 	err = s.linkStagedFile(namespace, tmpPath, d)
 	if err != nil {
@@ -96,29 +98,31 @@ func (s *FilesystemBlobStore) StatBlob(namespace string, d digest.Digest) (int64
 	return fi.Size(), nil
 }
 
-func (s *FilesystemBlobStore) writeBlobToStaging(
+func (s *FilesystemBlobStore) writeBlob(
 	namespace string,
+	tmpPath string,
 	d digest.Digest,
 	size int64,
 	r io.Reader,
-) (string, int64, error) {
+) (int64, error) {
 	h, err := blobstore.HasherFor(d)
 	if err != nil {
-		return "", 0, err
+		return 0, err
 	}
 
-	tmpPath, n, err := s.writeToStaging(namespace, io.TeeReader(r, h))
-	if err != nil {
-		return "", 0, err
-	}
+	n, writeErr := s.writeToStaging(namespace, tmpPath, io.TeeReader(r, h))
 
 	if n != size {
 		removeErr := removeFileIfExists(tmpPath)
 		if removeErr != nil {
-			s.logger.Warn("writeBlobToStaging: remove staged file", logtag.Path(tmpPath), logtag.Err(removeErr))
+			s.logger.Warn("writeBlob: remove staged file", logtag.Path(tmpPath), logtag.Err(removeErr))
 		}
 
-		return "", 0, fmt.Errorf("%w: got %d, want %d", blobstore.ErrSizeInvalid, n, size)
+		return 0, fmt.Errorf("%w: got %d, want %d", blobstore.ErrSizeInvalid, n, size)
+	}
+
+	if writeErr != nil {
+		return 0, writeErr
 	}
 
 	actual := digest.NewDigest(d.Algorithm(), h)
@@ -126,30 +130,29 @@ func (s *FilesystemBlobStore) writeBlobToStaging(
 	if err != nil {
 		removeErr := removeFileIfExists(tmpPath)
 		if removeErr != nil {
-			s.logger.Warn("writeBlobToStaging: remove staged file", logtag.Path(tmpPath), logtag.Err(removeErr))
+			s.logger.Warn("writeBlob: remove staged file", logtag.Path(tmpPath), logtag.Err(removeErr))
 		}
 
-		return "", 0, err
+		return 0, err
 	}
 
-	return tmpPath, n, nil
+	return n, nil
 }
 
-func (s *FilesystemBlobStore) writeToStaging(namespace string, r io.Reader) (_ string, _ int64, err error) {
+func (s *FilesystemBlobStore) writeToStaging(namespace, tmpPath string, r io.Reader) (_ int64, err error) {
 	stagingDir := filepath.Join(s.prefix, namespace, ".staging")
 	err = os.MkdirAll(stagingDir, 0o750)
 	if err != nil {
-		return "", 0, fmt.Errorf("mkdir staging: %w", err)
+		return 0, fmt.Errorf("mkdir staging: %w", err)
 	}
 
-	tmpPath := buildStagingPath(s.prefix, namespace, uuid.New().String())
 	f, err := os.OpenFile( //nolint:gosec // path built from constructor args + UUID
 		tmpPath,
 		os.O_CREATE|os.O_WRONLY|os.O_EXCL,
 		0o600,
 	)
 	if err != nil {
-		return "", 0, fmt.Errorf("create tmp: %w", err)
+		return 0, fmt.Errorf("create tmp: %w", err)
 	}
 
 	defer func() {
@@ -165,17 +168,17 @@ func (s *FilesystemBlobStore) writeToStaging(namespace string, r io.Reader) (_ s
 		}
 	}()
 
-	n, err := io.Copy(f, r)
-	if err != nil {
-		return "", 0, fmt.Errorf("write: %w", err)
+	n, copyErr := io.Copy(f, r)
+	if copyErr != nil {
+		return n, fmt.Errorf("write: %w", copyErr)
 	}
 
 	err = f.Sync()
 	if err != nil {
-		return "", 0, fmt.Errorf("sync: %w", err)
+		return 0, fmt.Errorf("sync: %w", err)
 	}
 
-	return tmpPath, n, nil
+	return n, nil
 }
 
 func (s *FilesystemBlobStore) linkStagedFile(namespace, tmpPath string, d digest.Digest) error {

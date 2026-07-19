@@ -47,7 +47,7 @@ func (h *RegistryHandler) handleGetBlob(w http.ResponseWriter, r *http.Request) 
 
 	first, last, err := parseRangeHeader(rangeHeader)
 	if err != nil {
-		h.registryErrToHTTP(w, "handleGetBlob", err)
+		h.serveFullBlob(w, r, name, d, digestStr)
 
 		return
 	}
@@ -119,6 +119,7 @@ func (h *RegistryHandler) serveRangeBlob(
 
 	partialSize := last - first + 1
 
+	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", first, last, totalSize))
 	w.Header().Set("Content-Length", strconv.FormatInt(partialSize, 10))
 	w.Header().Set("Docker-Content-Digest", digestStr)

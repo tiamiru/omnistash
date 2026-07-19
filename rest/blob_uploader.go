@@ -1,12 +1,16 @@
 package rest
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 
 	"github.com/opencontainers/go-digest"
+
+	"github.com/tiamiru/omnistash/internal/blob"
+	"github.com/tiamiru/omnistash/internal/namespace"
 )
 
 // handlePostBlobUploads implements POST /v2/{name}/blobs/uploads/.
@@ -14,6 +18,21 @@ import (
 func (h *RegistryHandler) handlePostBlobUploads(w http.ResponseWriter, r *http.Request) {
 	name := repoName(r)
 	q := r.URL.Query()
+
+	alg := q.Get("digest-algorithm")
+	if alg != "" {
+		if !digest.Algorithm(alg).Available() {
+			h.writeOCIError(
+				w,
+				"handlePostBlobUploads",
+				http.StatusBadRequest,
+				ociCodeUnsupported,
+				"unsupported digest algorithm",
+			)
+
+			return
+		}
+	}
 
 	mountDigest := q.Get("mount")
 	if mountDigest != "" {
@@ -50,7 +69,21 @@ func (h *RegistryHandler) handleMonolithicUpload(
 	r *http.Request,
 	name, digestStr string,
 ) {
+	err := namespace.ValidateName(name)
+	if err != nil {
+		h.registryErrToHTTP(w, "handleMonolithicUpload", err)
+
+		return
+	}
+
 	d := digest.Digest(digestStr)
+
+	err = blob.ValidateDigest(d)
+	if err != nil {
+		h.registryErrToHTTP(w, "handleMonolithicUpload", err)
+
+		return
+	}
 
 	clStr := r.Header.Get("Content-Length")
 	size, err := strconv.ParseInt(clStr, 10, 64)
@@ -85,23 +118,22 @@ func (h *RegistryHandler) handleMountBlob(
 ) {
 	d := digest.Digest(digestStr)
 
-	uploadID, mounted, err := h.blob.MountBlob(r.Context(), sourceName, targetName, d)
+	err := h.blob.MountBlob(r.Context(), sourceName, targetName, d)
+	if errors.Is(err, blob.ErrMountFailed) {
+		h.handleStartUpload(w, r, targetName)
+
+		return
+	}
+
 	if err != nil {
 		h.registryErrToHTTP(w, "handleMountBlob", err)
 
 		return
 	}
 
-	if mounted {
-		w.Header().Set("Location", blobURL(targetName, digestStr))
-		w.Header().Set("Docker-Content-Digest", digestStr)
-		w.WriteHeader(http.StatusCreated)
-
-		return
-	}
-
-	w.Header().Set("Location", uploadSessionURL(targetName, uploadID))
-	w.WriteHeader(http.StatusAccepted)
+	w.Header().Set("Location", blobURL(targetName, digestStr))
+	w.Header().Set("Docker-Content-Digest", digestStr)
+	w.WriteHeader(http.StatusCreated)
 }
 
 // handleGetBlobUpload implements GET /v2/{name}/blobs/uploads/{uuid}.
@@ -125,6 +157,13 @@ func (h *RegistryHandler) handleGetBlobUpload(w http.ResponseWriter, r *http.Req
 func (h *RegistryHandler) handlePatchBlobUpload(w http.ResponseWriter, r *http.Request) {
 	name := repoName(r)
 	uploadID := r.PathValue("uuid")
+
+	err := namespace.ValidateName(name)
+	if err != nil {
+		h.registryErrToHTTP(w, "handlePatchBlobUpload", err)
+
+		return
+	}
 
 	var offset int64
 
@@ -156,6 +195,14 @@ func (h *RegistryHandler) handlePatchBlobUpload(w http.ResponseWriter, r *http.R
 func (h *RegistryHandler) handlePutBlobUpload(w http.ResponseWriter, r *http.Request) {
 	name := repoName(r)
 	uploadID := r.PathValue("uuid")
+
+	err := namespace.ValidateName(name)
+	if err != nil {
+		h.registryErrToHTTP(w, "handlePutBlobUpload", err)
+
+		return
+	}
+
 	digestStr := r.URL.Query().Get("digest")
 
 	if digestStr == "" {
@@ -172,6 +219,13 @@ func (h *RegistryHandler) handlePutBlobUpload(w http.ResponseWriter, r *http.Req
 
 	d := digest.Digest(digestStr)
 
+	err = blob.ValidateDigest(d)
+	if err != nil {
+		h.registryErrToHTTP(w, "handlePutBlobUpload", err)
+
+		return
+	}
+
 	// If Content-Length > 0 the PUT body is a final chunk.
 	var finalChunk io.Reader
 	contentLengthStr := r.Header.Get("Content-Length")
@@ -182,7 +236,7 @@ func (h *RegistryHandler) handlePutBlobUpload(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	err := h.blob.CommitUpload(r.Context(), name, uploadID, d, finalChunk)
+	err = h.blob.CommitUpload(r.Context(), name, uploadID, d, finalChunk)
 	if err != nil {
 		h.registryErrToHTTP(w, "handlePutBlobUpload", err)
 

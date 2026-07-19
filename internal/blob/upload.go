@@ -43,7 +43,7 @@ func (s *Service) MonolithicUpload(
 	}
 
 	actualSize, err := s.blobs.PutBlob(name, d, size, r)
-	if err != nil {
+	if err != nil && !errors.Is(err, blobstore.ErrBlobCommitted) {
 		if errors.Is(err, blobstore.ErrSizeInvalid) {
 			return fmt.Errorf("MonolithicUpload: %w", ocierror.ErrSizeInvalid)
 		}
@@ -53,6 +53,13 @@ func (s *Service) MonolithicUpload(
 		}
 
 		return fmt.Errorf("MonolithicUpload: %w", err)
+	}
+
+	if errors.Is(err, blobstore.ErrBlobCommitted) {
+		actualSize, err = s.blobs.StatBlob(name, d)
+		if err != nil {
+			return fmt.Errorf("MonolithicUpload: stat existing: %w", err)
+		}
 	}
 
 	err = s.meta.Atomic(ctx, func(ctx context.Context, tx metastore.TxOps) error {
@@ -165,7 +172,7 @@ func (s *Service) CancelUpload(ctx context.Context, name, uploadID string) error
 		return fmt.Errorf("CancelUpload: %w", err)
 	}
 
-	err = s.blobs.CancelBlobUpload(name, uploadID)
+	_, err = s.blobs.GetBlobUploadOffset(name, uploadID)
 	if err != nil {
 		if errors.Is(err, blobstore.ErrBlobUploadUnknown) {
 			return fmt.Errorf("CancelUpload: %w", ocierror.ErrBlobUploadUnknown)
@@ -174,58 +181,62 @@ func (s *Service) CancelUpload(ctx context.Context, name, uploadID string) error
 		return fmt.Errorf("CancelUpload: %w", err)
 	}
 
+	err = s.blobs.CancelBlobUpload(name, uploadID)
+	if err != nil {
+		return fmt.Errorf("CancelUpload: %w", err)
+	}
+
 	return nil
 }
 
 // MountBlob attempts to cross-mount d from sourceName into targetName.
-// Returns (uploadID, false, nil) when the blob is absent in source (fall back to upload).
-// Returns ("", true, nil) when the mount succeeds.
+// Returns nil on success.
+// Returns ErrMountFailed when the source blob is unavailable; the caller should fall back to a regular upload.
 func (s *Service) MountBlob(
 	ctx context.Context,
 	sourceName, targetName string,
 	d digest.Digest,
-) (string, bool, error) {
-	err := namespace.ValidateName(sourceName)
+) error {
+	err := validateNamespaceDigest(ctx, s.meta, targetName, d)
 	if err != nil {
-		return "", false, fmt.Errorf("MountBlob: %w", err)
+		return fmt.Errorf("MountBlob: %w", err)
 	}
 
-	// Target must exist; absent source is a fallback condition, not an error.
-	err = validateNamespaceDigest(ctx, s.meta, targetName, d)
+	err = namespace.ValidateName(sourceName)
 	if err != nil {
-		return "", false, fmt.Errorf("MountBlob: %w", err)
+		return ErrMountFailed
 	}
 
 	sourceExists, err := s.meta.NamespaceExists(ctx, sourceName)
 	if err != nil {
-		return "", false, fmt.Errorf("MountBlob: %w", err)
+		return fmt.Errorf("MountBlob: %w", err)
 	}
 
 	if !sourceExists {
-		return s.startFallbackUpload(targetName)
+		return ErrMountFailed
 	}
 
 	rc, sourceSize, err := s.blobs.GetBlob(sourceName, d)
 	if err != nil {
 		if errors.Is(err, blobstore.ErrBlobUnknown) {
-			return s.startFallbackUpload(targetName)
+			return ErrMountFailed
 		}
 
-		return "", false, fmt.Errorf("MountBlob: %w", err)
+		return fmt.Errorf("MountBlob: %w", err)
 	}
 
 	mountErr := s.mountBlobCopy(ctx, targetName, d, rc, sourceSize)
 	closeErr := rc.Close()
 
 	if mountErr != nil {
-		return "", false, mountErr
+		return mountErr
 	}
 
 	if closeErr != nil {
-		return "", false, fmt.Errorf("MountBlob: close: %w", closeErr)
+		return fmt.Errorf("MountBlob: close: %w", closeErr)
 	}
 
-	return "", true, nil
+	return nil
 }
 
 func (s *Service) handleFinalizeError(name, uploadID string, err error) error {
@@ -294,15 +305,6 @@ func (s *Service) appendFinalChunk(name, uploadID string, finalChunk io.Reader) 
 	}
 
 	return newOffset, nil
-}
-
-func (s *Service) startFallbackUpload(targetName string) (string, bool, error) {
-	uid, err := s.blobs.InitiateBlobUpload(targetName)
-	if err != nil {
-		return "", false, fmt.Errorf("MountBlob: fallback upload: %w", err)
-	}
-
-	return uid, false, nil
 }
 
 func (s *Service) mountBlobCopy(
