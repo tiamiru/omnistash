@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"github.com/tiamiru/omnistash/internal/logtag"
-	"github.com/tiamiru/omnistash/internal/manifest"
 )
 
 const maxManifestSize = 4 * 1024 * 1024 // 4 MiB
@@ -78,16 +77,7 @@ func (h *RegistryHandler) handlePutManifest(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	tags := r.URL.Query()["tag"]
-
-	var result manifest.PutResult
-
-	if len(tags) > 0 {
-		result, err = h.manifest.PutManifestWithTags(r.Context(), ns, reference, tags, contentType, body)
-	} else {
-		result, err = h.manifest.PutManifest(r.Context(), ns, reference, contentType, body)
-	}
-
+	result, err := h.manifest.PutManifest(r.Context(), ns, reference, contentType, body)
 	if err != nil {
 		h.registryErrToHTTP(w, "handlePutManifest", err)
 
@@ -96,10 +86,6 @@ func (h *RegistryHandler) handlePutManifest(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set("Location", result.Location)
 	w.Header().Set("Docker-Content-Digest", result.Digest.String())
-
-	for _, tag := range result.Tags {
-		w.Header().Add(headerOCITag, tag)
-	}
 
 	if result.Subject != nil {
 		w.Header().Set(headerOCISubject, result.Subject.String())

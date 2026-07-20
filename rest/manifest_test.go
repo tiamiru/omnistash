@@ -22,11 +22,12 @@ func newManifestHandler(svc *stub.ManifestService) *RegistryHandler {
 }
 
 func newManifestRequest(ctx context.Context, method, rawQuery string, body []byte) *http.Request {
+	ref := stub.FixtureDigest.String()
 	r := httptest.NewRequestWithContext(
-		ctx, method, "/manifests/latest?"+rawQuery, bytes.NewReader(body),
+		ctx, method, "/manifests/"+ref+"?"+rawQuery, bytes.NewReader(body),
 	)
 	r = withRepoName(r, "myrepo")
-	r.SetPathValue("reference", "latest")
+	r.SetPathValue("reference", ref)
 
 	return r
 }
@@ -83,7 +84,6 @@ func TestHandlePutManifest(t *testing.T) {
 		wantStatus  int
 		wantCalls   []string
 		wantSubject string
-		wantOCITags []string
 	}{
 		{
 			name:       "error path: body exceeds maxManifestSize returns 413",
@@ -91,17 +91,10 @@ func TestHandlePutManifest(t *testing.T) {
 			wantStatus: http.StatusRequestEntityTooLarge,
 		},
 		{
-			name:       "happy path: no tag query params routes to PutManifest",
+			name:       "happy path: PutManifest",
 			body:       []byte(`{}`),
 			wantStatus: http.StatusCreated,
 			wantCalls:  []string{"PutManifest"},
-		},
-		{
-			name:        "happy path: tag query params route to PutManifestWithTags",
-			body:        []byte(`{}`),
-			queryParams: "tag=latest&tag=v1.0",
-			wantStatus:  http.StatusCreated,
-			wantCalls:   []string{"PutManifestWithTags"},
 		},
 		{
 			name: "happy path: non-nil subject sets OCI-Subject header",
@@ -112,16 +105,6 @@ func TestHandlePutManifest(t *testing.T) {
 			wantStatus:  http.StatusCreated,
 			wantCalls:   []string{"PutManifest"},
 			wantSubject: subjectDigest.String(),
-		},
-		{
-			name: "happy path: result tags set OCI-Tag headers",
-			body: []byte(`{}`),
-			mutateStub: func(s *stub.ManifestService) {
-				s.Tags = []string{"latest", "v1.0"}
-			},
-			wantStatus:  http.StatusCreated,
-			wantCalls:   []string{"PutManifest"},
-			wantOCITags: []string{"latest", "v1.0"},
 		},
 	}
 
@@ -150,9 +133,16 @@ func TestHandlePutManifest(t *testing.T) {
 			assert.Equal(t, stub.FixtureLocation, res.Header.Get("Location"))
 			assert.Equal(t, stub.FixtureDigest.String(), res.Header.Get("Docker-Content-Digest"))
 			assert.Equal(t, tc.wantSubject, res.Header.Get(headerOCISubject))
-			assert.Equal(t, tc.wantOCITags, res.Header.Values(headerOCITag))
 		})
 	}
+}
+
+func newManifestRequestWithRef(ctx context.Context, method, reference string) *http.Request {
+	r := httptest.NewRequestWithContext(ctx, method, "/manifests/"+reference, http.NoBody)
+	r = withRepoName(r, "myrepo")
+	r.SetPathValue("reference", reference)
+
+	return r
 }
 
 func TestHandleDeleteManifest(t *testing.T) {
@@ -162,7 +152,7 @@ func TestHandleDeleteManifest(t *testing.T) {
 	h := newManifestHandler(svc)
 
 	w := httptest.NewRecorder()
-	h.handleDeleteManifest(w, newManifestRequest(t.Context(), http.MethodDelete, "", nil))
+	h.handleDeleteManifest(w, newManifestRequestWithRef(t.Context(), http.MethodDelete, stub.FixtureDigest.String()))
 
 	assert.Equal(t, http.StatusAccepted, w.Result().StatusCode)
 	assert.Equal(t, []string{"DeleteManifest"}, svc.Calls)

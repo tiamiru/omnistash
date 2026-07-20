@@ -97,3 +97,33 @@ func (m *TxOps) StatNamespaceBlob(
 
 	return n, args.Error(1)
 }
+
+func (m *TxOps) InsertManifest(
+	ctx context.Context,
+	namespace string,
+	d digest.Digest,
+	mediaType string,
+	size int64,
+) error {
+	args := m.Called(ctx, namespace, d, mediaType, size)
+
+	return args.Error(0)
+}
+
+func (m *TxOps) GetManifestByDigest(
+	ctx context.Context,
+	namespace string,
+	d digest.Digest,
+) (metastore.ManifestRow, error) {
+	args := m.Called(ctx, namespace, d)
+
+	row, _ := args.Get(0).(metastore.ManifestRow)
+
+	return row, args.Error(1)
+}
+
+func (m *TxOps) DeleteManifestByDigest(ctx context.Context, namespace string, d digest.Digest) error {
+	args := m.Called(ctx, namespace, d)
+
+	return args.Error(0)
+}

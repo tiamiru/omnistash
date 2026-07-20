@@ -54,10 +54,33 @@ type BlobOps interface {
 	) (size int64, err error)
 }
 
+// ManifestRow is the metastore representation of a manifest row.
+type ManifestRow struct {
+	Namespace string
+	Digest    digest.Digest
+	MediaType string
+	Size      int64
+}
+
+// ManifestOps scopes manifest and tag operations to a repository namespace.
+type ManifestOps interface {
+	// InsertManifest records manifest metadata. Idempotent on (namespace, digest).
+	InsertManifest(ctx context.Context, namespace string, d digest.Digest, mediaType string, size int64) error
+
+	// GetManifestByDigest returns metadata for one manifest.
+	// Returns ocierror.ErrManifestUnknown if absent or soft-deleted.
+	GetManifestByDigest(ctx context.Context, namespace string, d digest.Digest) (ManifestRow, error)
+
+	// DeleteManifestByDigest soft-deletes the manifest row.
+	// Returns ocierror.ErrManifestUnknown if already absent.
+	DeleteManifestByDigest(ctx context.Context, namespace string, d digest.Digest) error
+}
+
 // TxOps is the full set of operations available inside an Atomic transaction.
 type TxOps interface {
 	NamespaceOps
 	BlobOps
+	ManifestOps
 }
 
 // MetadataStore is the top-level store handle.

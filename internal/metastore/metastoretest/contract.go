@@ -8,4 +8,5 @@ func ExerciseMetadataStoreContract(t *testing.T, newStore MetadataStoreSetupFunc
 	ExerciseAtomicContract(t, newStore)
 	ExerciseNamespaceOpsContract(t, newStore)
 	ExerciseBlobOpsContract(t, newStore)
+	ExerciseManifestOpsContract(t, newStore)
 }

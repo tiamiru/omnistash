@@ -90,7 +90,7 @@ func run(logger *slog.Logger, cfg config) error {
 	blobStore := fsblobstore.NewFilesystemBlobStore(cfg.blobstorePath, fsblobstore.WithLogger(logger))
 	blobSvc := blob.NewService(meta, blobStore)
 
-	manifestSvc := manifest.NewService(logger)
+	manifestSvc := manifest.NewService(meta, blobStore, logger)
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
