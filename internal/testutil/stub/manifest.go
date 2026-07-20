@@ -13,7 +13,7 @@ import (
 const (
 	FixtureMediaType               = "application/vnd.oci.image.manifest.v1+json"
 	FixtureSizeBytes               = int64(512)
-	FixtureDigest    digest.Digest = "sha256:a948904f2f0f479b8f936f443f8fc38c7f8b532c64fd9b5f813f95e4f0a6a8b"
+	FixtureDigest    digest.Digest = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 	FixtureLocation                = "/v2/myrepo/manifests/" + string(FixtureDigest)
 )
 
@@ -22,11 +22,10 @@ func FixtureBody() []byte {
 }
 
 // ManifestService is a stub implementation of rest.ManifestService that always succeeds.
-// Set Subject and Tags to control optional fields in PutManifest responses.
+// Set Subject to control optional fields in PutManifest responses.
 // Inspect Calls after each request to verify which methods were invoked.
 type ManifestService struct {
 	Subject *digest.Digest
-	Tags    []string
 	Calls   []string
 }
 
@@ -61,24 +60,6 @@ func (s *ManifestService) PutManifest(_ context.Context, _, _, _ string, _ []byt
 		Digest:   FixtureDigest,
 		Location: FixtureLocation,
 		Subject:  s.Subject,
-		Tags:     s.Tags,
-	}, nil
-}
-
-func (s *ManifestService) PutManifestWithTags(
-	_ context.Context,
-	_, _ string,
-	_ []string,
-	_ string,
-	_ []byte,
-) (manifest.PutResult, error) {
-	s.Calls = append(s.Calls, "PutManifestWithTags")
-
-	return manifest.PutResult{
-		Digest:   FixtureDigest,
-		Location: FixtureLocation,
-		Subject:  s.Subject,
-		Tags:     s.Tags,
 	}, nil
 }
 

@@ -20,3 +20,17 @@ const (
 		INSERT OR IGNORE INTO namespace_blobs (name, digest, size)
 		VALUES (?, ?, ?)`
 )
+
+const (
+	sqlInsertManifest = `
+		INSERT OR IGNORE INTO manifests (namespace, digest, media_type, size)
+		VALUES (?, ?, ?, ?)`
+
+	sqlGetManifestByDigest = `
+		SELECT namespace, digest, media_type, size FROM manifests
+		WHERE namespace = ? AND digest = ? AND lifecycle = 'active'`
+
+	sqlDeleteManifestByDigest = `
+		UPDATE manifests SET lifecycle = 'pending_deletion', deleted_at = unixepoch()
+		WHERE namespace = ? AND digest = ? AND lifecycle = 'active'`
+)

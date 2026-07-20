@@ -14,9 +14,11 @@ import (
 var ErrMissingTables = errors.New("missing tables")
 
 //nolint:gochecknoglobals // read-only list of tables that must exist after migration
-var requiredTables = [2]string{
+var requiredTables = [4]string{
 	"namespace",
 	"namespace_blobs",
+	"manifests",
+	"manifest_tags",
 }
 
 const schema = `
@@ -35,6 +37,28 @@ CREATE TABLE IF NOT EXISTS namespace_blobs (
     deleted_at     TIMESTAMP,
     PRIMARY KEY (name, digest),
     FOREIGN KEY (name) REFERENCES namespace(name)
+);
+
+CREATE TABLE IF NOT EXISTS manifests (
+    namespace   TEXT    NOT NULL,
+    digest      TEXT    NOT NULL,
+    media_type  TEXT    NOT NULL,
+    size        INTEGER NOT NULL,
+    lifecycle   TEXT    NOT NULL DEFAULT 'active',
+    created_at  INTEGER NOT NULL DEFAULT (unixepoch()),
+    deleted_at  INTEGER,
+    PRIMARY KEY (namespace, digest),
+    FOREIGN KEY (namespace) REFERENCES namespace(name)
+);
+
+CREATE TABLE IF NOT EXISTS manifest_tags (
+    namespace   TEXT    NOT NULL,
+    tag         TEXT    NOT NULL,
+    digest      TEXT    NOT NULL,
+    created_at  INTEGER NOT NULL DEFAULT (unixepoch()),
+    updated_at  INTEGER NOT NULL DEFAULT (unixepoch()),
+    PRIMARY KEY (namespace, tag),
+    FOREIGN KEY (namespace) REFERENCES namespace(name)
 );
 `
 

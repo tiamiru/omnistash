@@ -12,5 +12,13 @@ type PutResult struct {
 	Digest   digest.Digest
 	Location string
 	Subject  *digest.Digest
-	Tags     []string
+}
+
+type partialManifest struct {
+	MediaType string          `json:"mediaType"`
+	Subject   *partialSubject `json:"subject,omitempty"`
+}
+
+type partialSubject struct {
+	Digest digest.Digest `json:"digest"`
 }

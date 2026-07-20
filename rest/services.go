@@ -11,10 +11,7 @@ import (
 	"github.com/tiamiru/omnistash/internal/namespace"
 )
 
-const (
-	headerOCITag     = "OCI-Tag"
-	headerOCISubject = "OCI-Subject"
-)
+const headerOCISubject = "OCI-Subject"
 
 var (
 	_ NamespaceService = &namespace.Service{}
@@ -53,13 +50,6 @@ type ManifestService interface {
 	PutManifest(
 		ctx context.Context,
 		namespace, reference, contentType string,
-		body []byte,
-	) (manifest.PutResult, error)
-	PutManifestWithTags(
-		ctx context.Context,
-		namespace, reference string,
-		tags []string,
-		contentType string,
 		body []byte,
 	) (manifest.PutResult, error)
 	GetManifest(ctx context.Context, namespace, reference string) (manifest.ManifestInfo, io.ReadCloser, error)
