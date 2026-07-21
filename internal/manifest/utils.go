@@ -34,8 +34,7 @@ func deriveReferrer(manifest ocispec.Manifest, d digest.Digest, size int64) *met
 	}
 }
 
-// deriveReferrerArtifactType computes the artifactType for a referrer descriptor per the OCI spec.
-// Image manifests fall back to config.mediaType; image indexes omit it (return "").
+// deriveReferrerArtifactType computes the artifactType for a referrer descriptor.
 func deriveReferrerArtifactType(m ocispec.Manifest) string {
 	if m.ArtifactType != "" {
 		return m.ArtifactType

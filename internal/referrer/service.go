@@ -35,14 +35,9 @@ func (s *Service) ListReferrers(
 		return ListResult{}, fmt.Errorf("ListReferrers: %w", err)
 	}
 
-	// Unknown namespace returns empty list per OCI spec (MUST NOT 404).
-	exists, err := s.meta.NamespaceExists(ctx, ns)
+	err = checkNamespaceExists(ctx, s.meta, ns)
 	if err != nil {
 		return ListResult{}, fmt.Errorf("ListReferrers: %w", err)
-	}
-
-	if !exists {
-		return ListResult{Manifests: []Descriptor{}}, nil
 	}
 
 	var rows []metastore.ReferrerRow

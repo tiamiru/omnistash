@@ -2,6 +2,7 @@ package rest
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/opencontainers/go-digest"
@@ -36,7 +37,9 @@ func (h *RegistryHandler) handleGetReferrers(w http.ResponseWriter, r *http.Requ
 	}
 
 	result, err := h.referrers.ListReferrers(r.Context(), ns, d, artifactType)
-	if err != nil {
+	if errors.Is(err, ocierror.ErrNameUnknown) {
+		result = referrer.ListResult{Manifests: []referrer.Descriptor{}}
+	} else if err != nil {
 		h.registryErrToHTTP(w, "handleGetReferrers", err)
 
 		return
