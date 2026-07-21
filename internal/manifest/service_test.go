@@ -186,6 +186,7 @@ func TestPutManifest(t *testing.T) {
 				m.On("Atomic", mock.Anything, mock.Anything).Return(nil)
 				m.Tx.On("InsertManifest", mock.Anything, testNamespace, subjectBodyDigest, testMediaType, int64(len(subjectBody))).
 					Return(nil)
+				m.Tx.On("UpsertReferrer", mock.Anything, testNamespace, mock.Anything).Return(nil)
 				bs.On("PutBlob", testNamespace, subjectBodyDigest, int64(len(subjectBody)), mock.Anything).
 					Return(int64(len(subjectBody)), nil)
 			},
@@ -478,6 +479,7 @@ func TestDeleteManifest(t *testing.T) {
 				m.On("NamespaceExists", mock.Anything, mock.Anything).Return(true, nil)
 				m.On("Atomic", mock.Anything, mock.Anything).Return(nil)
 				m.Tx.On("DeleteManifestByDigest", mock.Anything, testNamespace, defaultDigest).Return(nil)
+				m.Tx.On("DeleteReferrer", mock.Anything, testNamespace, defaultDigest).Return(nil)
 				bs.On("DeleteBlob", mock.Anything, testNamespace, defaultDigest).Return(nil)
 			},
 		},

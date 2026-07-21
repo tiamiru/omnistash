@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/opencontainers/go-digest"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -25,7 +26,7 @@ func TestParseManifestBody(t *testing.T) {
 		contentType string
 		body        []byte
 		wantErr     error
-		wantResult  *partialManifest
+		wantResult  *ocispec.Manifest
 	}{
 		{
 			name:    "error path: invalid json",
@@ -41,25 +42,25 @@ func TestParseManifestBody(t *testing.T) {
 			name:        "happy path: media type from content-type header",
 			contentType: "application/vnd.oci.image.manifest.v1+json",
 			body:        []byte(`{}`),
-			wantResult:  &partialManifest{MediaType: "application/vnd.oci.image.manifest.v1+json"},
+			wantResult:  &ocispec.Manifest{MediaType: "application/vnd.oci.image.manifest.v1+json"},
 		},
 		{
 			name:       "happy path: media type from body",
 			body:       validBody,
-			wantResult: &partialManifest{MediaType: "application/vnd.oci.image.manifest.v1+json"},
+			wantResult: &ocispec.Manifest{MediaType: "application/vnd.oci.image.manifest.v1+json"},
 		},
 		{
 			name:        "happy path: content-type header overrides body media type",
 			contentType: "application/vnd.docker.distribution.manifest.v2+json",
 			body:        validBody,
-			wantResult:  &partialManifest{MediaType: "application/vnd.docker.distribution.manifest.v2+json"},
+			wantResult:  &ocispec.Manifest{MediaType: "application/vnd.docker.distribution.manifest.v2+json"},
 		},
 		{
 			name: "happy path: subject digest extracted",
 			body: bodyWithSubject,
-			wantResult: &partialManifest{
+			wantResult: &ocispec.Manifest{
 				MediaType: "application/vnd.oci.image.manifest.v1+json",
-				Subject:   &partialSubject{Digest: subjectDigest},
+				Subject:   &ocispec.Descriptor{Digest: subjectDigest},
 			},
 		},
 	}

@@ -127,3 +127,27 @@ func (m *TxOps) DeleteManifestByDigest(ctx context.Context, namespace string, d 
 
 	return args.Error(0)
 }
+
+func (m *TxOps) UpsertReferrer(ctx context.Context, namespace string, row metastore.ReferrerRow) error {
+	args := m.Called(ctx, namespace, row)
+
+	return args.Error(0)
+}
+
+func (m *TxOps) ListReferrers(
+	ctx context.Context,
+	namespace string,
+	subjectDigest digest.Digest,
+) ([]metastore.ReferrerRow, error) {
+	args := m.Called(ctx, namespace, subjectDigest)
+
+	rows, _ := args.Get(0).([]metastore.ReferrerRow)
+
+	return rows, args.Error(1)
+}
+
+func (m *TxOps) DeleteReferrer(ctx context.Context, namespace string, referrerDigest digest.Digest) error {
+	args := m.Called(ctx, namespace, referrerDigest)
+
+	return args.Error(0)
+}

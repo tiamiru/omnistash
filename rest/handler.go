@@ -16,6 +16,7 @@ type RegistryHandler struct {
 	namespace NamespaceService
 	blob      BlobService
 	manifest  ManifestService
+	referrers ReferrersService
 	logger    *slog.Logger
 }
 
@@ -24,6 +25,7 @@ func NewRegistryHandler(
 	ns NamespaceService,
 	blobSvc BlobService,
 	manifestSvc ManifestService,
+	referrersSvc ReferrersService,
 	version, commit, date string,
 ) *RegistryHandler {
 	if logger == nil {
@@ -35,6 +37,7 @@ func NewRegistryHandler(
 		namespace: ns,
 		blob:      blobSvc,
 		manifest:  manifestSvc,
+		referrers: referrersSvc,
 		logger:    logger,
 	}
 }

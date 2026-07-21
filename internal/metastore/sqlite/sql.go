@@ -34,3 +34,26 @@ const (
 		UPDATE manifests SET lifecycle = 'pending_deletion', deleted_at = unixepoch()
 		WHERE namespace = ? AND digest = ? AND lifecycle = 'active'`
 )
+
+const (
+	sqlUpsertReferrer = `
+		INSERT INTO manifest_referrers
+		    (namespace, subject_digest, referrer_digest, media_type, artifact_type, size, annotations)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (namespace, referrer_digest) DO UPDATE SET
+		    subject_digest  = excluded.subject_digest,
+		    media_type      = excluded.media_type,
+		    artifact_type   = excluded.artifact_type,
+		    size            = excluded.size,
+		    annotations     = excluded.annotations`
+
+	sqlListReferrers = `
+		SELECT referrer_digest, media_type, artifact_type, size, annotations
+		FROM manifest_referrers
+		WHERE namespace = ? AND subject_digest = ?
+		ORDER BY created_at ASC`
+
+	sqlDeleteReferrer = `
+		DELETE FROM manifest_referrers
+		WHERE namespace = ? AND referrer_digest = ?`
+)

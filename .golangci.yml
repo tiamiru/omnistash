@@ -37,7 +37,7 @@ linters:
 
   exclusions:
     rules:
-    - text: '"OCI-(Tag|Subject)" is not canonical'
+    - text: '"OCI-(Tag|Subject|Filters-Applied)" is not canonical'
       linters: [ canonicalheader ]
     - text: 'should have a package comment'
       linters: [ revive ]
