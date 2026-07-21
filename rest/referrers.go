@@ -6,22 +6,15 @@ import (
 	"net/http"
 
 	"github.com/opencontainers/go-digest"
+	specs "github.com/opencontainers/image-spec/specs-go"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/tiamiru/omnistash/internal/logtag"
 	"github.com/tiamiru/omnistash/internal/ocierror"
 	"github.com/tiamiru/omnistash/internal/referrer"
 )
 
-const (
-	mediaTypeOCIImageIndex     = "application/vnd.oci.image.index.v1+json"
-	ociImageIndexSchemaVersion = 2
-)
-
-type ociImageIndex struct {
-	SchemaVersion int                   `json:"schemaVersion"`
-	MediaType     string                `json:"mediaType"`
-	Manifests     []referrer.Descriptor `json:"manifests"`
-}
+const ociImageIndexSchemaVersion = 2
 
 // handleGetReferrers implements GET /v2/{name}/referrers/{digest}.
 func (h *RegistryHandler) handleGetReferrers(w http.ResponseWriter, r *http.Request) {
@@ -38,7 +31,7 @@ func (h *RegistryHandler) handleGetReferrers(w http.ResponseWriter, r *http.Requ
 
 	result, err := h.referrers.ListReferrers(r.Context(), ns, d, artifactType)
 	if errors.Is(err, ocierror.ErrNameUnknown) {
-		result = referrer.ListResult{Manifests: []referrer.Descriptor{}}
+		result = referrer.ListResult{Manifests: []ocispec.Descriptor{}}
 	} else if err != nil {
 		h.registryErrToHTTP(w, "handleGetReferrers", err)
 
@@ -47,13 +40,13 @@ func (h *RegistryHandler) handleGetReferrers(w http.ResponseWriter, r *http.Requ
 
 	manifests := result.Manifests
 	if manifests == nil {
-		manifests = []referrer.Descriptor{}
+		manifests = []ocispec.Descriptor{}
 	}
 
-	body, err := json.Marshal(ociImageIndex{
-		SchemaVersion: ociImageIndexSchemaVersion,
-		MediaType:     mediaTypeOCIImageIndex,
-		Manifests:     manifests,
+	body, err := json.Marshal(ocispec.Index{
+		Versioned: specs.Versioned{SchemaVersion: ociImageIndexSchemaVersion},
+		MediaType: ocispec.MediaTypeImageIndex,
+		Manifests: manifests,
 	})
 	if err != nil {
 		h.logger.Warn("handleGetReferrers: marshal response", logtag.Err(err))
@@ -68,7 +61,7 @@ func (h *RegistryHandler) handleGetReferrers(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	w.Header().Set("Content-Type", mediaTypeOCIImageIndex)
+	w.Header().Set("Content-Type", ocispec.MediaTypeImageIndex)
 
 	if result.FilterApplied {
 		w.Header().Set(headerOCIFiltersApplied, "artifactType")

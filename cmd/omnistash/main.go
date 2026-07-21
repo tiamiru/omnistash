@@ -18,6 +18,7 @@ import (
 	"github.com/tiamiru/omnistash/internal/manifest"
 	"github.com/tiamiru/omnistash/internal/metastore/sqlite"
 	"github.com/tiamiru/omnistash/internal/namespace"
+	"github.com/tiamiru/omnistash/internal/referrer"
 	"github.com/tiamiru/omnistash/rest"
 )
 
@@ -91,12 +92,13 @@ func run(logger *slog.Logger, cfg config) error {
 	blobSvc := blob.NewService(meta, blobStore)
 
 	manifestSvc := manifest.NewService(meta, blobStore, logger)
+	referrerSvc := referrer.NewService(meta)
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(signalChan)
 
-	handler := rest.NewRegistryHandler(logger, ns, blobSvc, manifestSvc, version, commit, date)
+	handler := rest.NewRegistryHandler(logger, ns, blobSvc, manifestSvc, referrerSvc, version, commit, date)
 	server := rest.NewServer(handler, cfg.addr)
 
 	logger.Info("main: server started", slog.String("addr", server.Addr))

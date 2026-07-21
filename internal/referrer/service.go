@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/opencontainers/go-digest"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/tiamiru/omnistash/internal/metastore"
 	"github.com/tiamiru/omnistash/internal/namespace"
@@ -52,10 +53,10 @@ func (s *Service) ListReferrers(
 		return ListResult{}, fmt.Errorf("ListReferrers: %w", err)
 	}
 
-	descriptors := make([]Descriptor, 0, len(rows))
+	descriptors := make([]ocispec.Descriptor, 0, len(rows))
 
 	for _, row := range rows {
-		descriptors = append(descriptors, Descriptor{
+		descriptors = append(descriptors, ocispec.Descriptor{
 			MediaType:    row.MediaType,
 			Digest:       row.Digest,
 			Size:         row.Size,

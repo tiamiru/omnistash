@@ -21,6 +21,7 @@ var (
 	_ NamespaceService = &namespace.Service{}
 	_ BlobService      = &blob.Service{}
 	_ ManifestService  = &manifest.Service{}
+	_ ReferrersService = &referrer.Service{}
 )
 
 type NamespaceService interface {

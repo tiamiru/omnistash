@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/opencontainers/go-digest"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/tiamiru/omnistash/internal/referrer"
 )
@@ -16,7 +17,7 @@ const FixtureArtifactType = "application/vnd.example.test"
 // Inspect Calls after each request to verify which methods were invoked.
 type ReferrersService struct {
 	FilterApplied bool
-	Manifests     []referrer.Descriptor
+	Manifests     []ocispec.Descriptor
 	Calls         []string
 }
 
@@ -34,7 +35,7 @@ func (s *ReferrersService) ListReferrers(
 
 	manifests := s.Manifests
 	if manifests == nil {
-		manifests = []referrer.Descriptor{
+		manifests = []ocispec.Descriptor{
 			{
 				MediaType:    FixtureMediaType,
 				Digest:       FixtureDigest,

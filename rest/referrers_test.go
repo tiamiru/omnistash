@@ -8,10 +8,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	specs "github.com/opencontainers/image-spec/specs-go"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tiamiru/omnistash/internal/referrer"
 	"github.com/tiamiru/omnistash/internal/testutil/stub"
 )
 
@@ -38,73 +39,111 @@ func newReferrersRequest(ctx context.Context, d string, artifactType string) *ht
 func TestHandleGetReferrers(t *testing.T) {
 	t.Parallel()
 
-	svc := stub.NewReferrersService()
-	h := newReferrersHandler(svc)
+	type wantResponse struct {
+		status       int
+		filterHeader string
+		calls        []string
+		body         ocispec.Index
+	}
 
-	w := httptest.NewRecorder()
-	h.handleGetReferrers(w, newReferrersRequest(t.Context(), stub.FixtureDigest.String(), ""))
+	fixtureManifest := ocispec.Descriptor{
+		MediaType:    stub.FixtureMediaType,
+		Digest:       stub.FixtureDigest,
+		Size:         stub.FixtureSizeBytes,
+		ArtifactType: stub.FixtureArtifactType,
+	}
 
-	res := w.Result()
-	assert.Equal(t, http.StatusOK, res.StatusCode)
-	assert.Equal(t, mediaTypeOCIImageIndex, res.Header.Get("Content-Type"))
-	assert.Empty(t, res.Header.Get(headerOCIFiltersApplied))
-	assert.Equal(t, []string{"ListReferrers"}, svc.Calls)
+	testCases := []struct {
+		name         string
+		digest       string
+		artifactType string
+		setup        func(*stub.ReferrersService)
+		wantResponse wantResponse
+	}{
+		{
+			name:   "error path: invalid digest",
+			digest: "notadigest",
+			wantResponse: wantResponse{
+				status: http.StatusBadRequest,
+			},
+		},
+		{
+			name:   "happy path: returns manifests",
+			digest: stub.FixtureDigest.String(),
+			wantResponse: wantResponse{
+				status: http.StatusOK,
+				calls:  []string{"ListReferrers"},
+				body: ocispec.Index{
+					Versioned: specs.Versioned{SchemaVersion: ociImageIndexSchemaVersion},
+					MediaType: ocispec.MediaTypeImageIndex,
+					Manifests: []ocispec.Descriptor{fixtureManifest},
+				},
+			},
+		},
+		{
+			name:         "happy path: filter applied sets header",
+			digest:       stub.FixtureDigest.String(),
+			artifactType: "application/vnd.example.test",
+			setup: func(svc *stub.ReferrersService) {
+				svc.FilterApplied = true
+			},
+			wantResponse: wantResponse{
+				status:       http.StatusOK,
+				filterHeader: "artifactType",
+				calls:        []string{"ListReferrers"},
+				body: ocispec.Index{
+					Versioned: specs.Versioned{SchemaVersion: ociImageIndexSchemaVersion},
+					MediaType: ocispec.MediaTypeImageIndex,
+					Manifests: []ocispec.Descriptor{fixtureManifest},
+				},
+			},
+		},
+		{
+			name:   "happy path: empty manifests serializes as array",
+			digest: stub.FixtureDigest.String(),
+			setup: func(svc *stub.ReferrersService) {
+				svc.Manifests = []ocispec.Descriptor{}
+			},
+			wantResponse: wantResponse{
+				status: http.StatusOK,
+				calls:  []string{"ListReferrers"},
+				body: ocispec.Index{
+					Versioned: specs.Versioned{SchemaVersion: ociImageIndexSchemaVersion},
+					MediaType: ocispec.MediaTypeImageIndex,
+					Manifests: []ocispec.Descriptor{},
+				},
+			},
+		},
+	}
 
-	var index ociImageIndex
-	err := json.NewDecoder(w.Body).Decode(&index)
-	require.NoError(t, err)
-	assert.Equal(t, 2, index.SchemaVersion)
-	assert.Equal(t, mediaTypeOCIImageIndex, index.MediaType)
-	assert.Len(t, index.Manifests, 1)
-}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-func TestHandleGetReferrersFilterApplied(t *testing.T) {
-	t.Parallel()
+			svc := stub.NewReferrersService()
+			if tc.setup != nil {
+				tc.setup(svc)
+			}
+			h := newReferrersHandler(svc)
 
-	svc := stub.NewReferrersService()
-	svc.FilterApplied = true
-	h := newReferrersHandler(svc)
+			w := httptest.NewRecorder()
+			h.handleGetReferrers(w, newReferrersRequest(t.Context(), tc.digest, tc.artifactType))
 
-	w := httptest.NewRecorder()
-	h.handleGetReferrers(
-		w,
-		newReferrersRequest(t.Context(), stub.FixtureDigest.String(), "application/vnd.example.test"),
-	)
+			res := w.Result()
+			assert.Equal(t, tc.wantResponse.status, res.StatusCode)
+			assert.Equal(t, tc.wantResponse.calls, svc.Calls)
 
-	res := w.Result()
-	assert.Equal(t, http.StatusOK, res.StatusCode)
-	assert.Equal(t, "artifactType", res.Header.Get(headerOCIFiltersApplied))
-	assert.Equal(t, []string{"ListReferrers"}, svc.Calls)
-}
+			if tc.wantResponse.status != http.StatusOK {
+				return
+			}
 
-func TestHandleGetReferrersInvalidDigest(t *testing.T) {
-	t.Parallel()
+			assert.Equal(t, ocispec.MediaTypeImageIndex, res.Header.Get("Content-Type"))
+			assert.Equal(t, tc.wantResponse.filterHeader, res.Header.Get(headerOCIFiltersApplied))
 
-	svc := stub.NewReferrersService()
-	h := newReferrersHandler(svc)
-
-	w := httptest.NewRecorder()
-	h.handleGetReferrers(w, newReferrersRequest(t.Context(), "notadigest", ""))
-
-	assert.Equal(t, http.StatusBadRequest, w.Result().StatusCode)
-	assert.Empty(t, svc.Calls)
-}
-
-func TestHandleGetReferrersEmptyManifests(t *testing.T) {
-	t.Parallel()
-
-	svc := stub.NewReferrersService()
-	svc.Manifests = []referrer.Descriptor{}
-	h := newReferrersHandler(svc)
-
-	w := httptest.NewRecorder()
-	h.handleGetReferrers(w, newReferrersRequest(t.Context(), stub.FixtureDigest.String(), ""))
-
-	res := w.Result()
-	assert.Equal(t, http.StatusOK, res.StatusCode)
-
-	var index ociImageIndex
-	err := json.NewDecoder(w.Body).Decode(&index)
-	require.NoError(t, err)
-	assert.Empty(t, index.Manifests)
+			var got ocispec.Index
+			err := json.NewDecoder(w.Body).Decode(&got)
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantResponse.body, got)
+		})
+	}
 }
