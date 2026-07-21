@@ -9,9 +9,13 @@ import (
 	"github.com/tiamiru/omnistash/internal/blob"
 	"github.com/tiamiru/omnistash/internal/manifest"
 	"github.com/tiamiru/omnistash/internal/namespace"
+	"github.com/tiamiru/omnistash/internal/referrer"
 )
 
-const headerOCISubject = "OCI-Subject"
+const (
+	headerOCISubject        = "OCI-Subject"
+	headerOCIFiltersApplied = "OCI-Filters-Applied"
+)
 
 var (
 	_ NamespaceService = &namespace.Service{}
@@ -55,4 +59,13 @@ type ManifestService interface {
 	GetManifest(ctx context.Context, namespace, reference string) (manifest.ManifestInfo, io.ReadCloser, error)
 	HeadManifest(ctx context.Context, namespace, reference string) (manifest.ManifestInfo, error)
 	DeleteManifest(ctx context.Context, namespace, reference string) error
+}
+
+type ReferrersService interface {
+	ListReferrers(
+		ctx context.Context,
+		namespace string,
+		subject digest.Digest,
+		artifactType string,
+	) (referrer.ListResult, error)
 }

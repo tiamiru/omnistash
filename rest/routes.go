@@ -38,5 +38,7 @@ func buildOCIRouter(h *RegistryHandler) http.Handler {
 	mux.HandleFunc("PUT /manifests/{reference}", h.handlePutManifest)
 	mux.HandleFunc("DELETE /manifests/{reference}", h.handleDeleteManifest)
 
+	mux.HandleFunc("GET /referrers/{digest}", h.handleGetReferrers)
+
 	return mux
 }

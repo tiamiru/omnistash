@@ -16,6 +16,7 @@ type RegistryHandler struct {
 	namespace NamespaceService
 	blob      BlobService
 	manifest  ManifestService
+	referrers ReferrersService
 	logger    *slog.Logger
 }
 

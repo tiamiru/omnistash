@@ -32,6 +32,15 @@ func mustAtomic(t *testing.T, store metastore.MetadataStore, fn func(ctx context
 	require.NoError(t, err)
 }
 
+func seedNamespace(t *testing.T, store metastore.MetadataStore) {
+	t.Helper()
+	mustAtomic(t, store, func(ctx context.Context, tx metastore.TxOps) error {
+		_, err := tx.CreateNamespace(ctx, DefaultName)
+
+		return err
+	})
+}
+
 func seedNamespaceBlob(t *testing.T, store metastore.MetadataStore, d digest.Digest) {
 	t.Helper()
 	mustAtomic(t, store, func(ctx context.Context, tx metastore.TxOps) error {

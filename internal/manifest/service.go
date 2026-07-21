@@ -79,16 +79,16 @@ func (s *Service) PutManifest(
 		return PutResult{}, fmt.Errorf("PutManifest: %w", putErr)
 	}
 
-	err = s.meta.Atomic(ctx, func(ctx context.Context, tx metastore.TxOps) error {
-		return tx.InsertManifest(ctx, ns, computedDigest, partial.MediaType, size)
-	})
+	referrerRow := deriveReferrer(partial, computedDigest, size)
+	err = s.storeManifest(ctx, ns, partial.MediaType, computedDigest, size, referrerRow)
 	if err != nil {
 		return PutResult{}, fmt.Errorf("PutManifest: %w", err)
 	}
 
 	var subject *digest.Digest
 	if partial.Subject != nil && partial.Subject.Digest != "" {
-		subject = &partial.Subject.Digest
+		d := partial.Subject.Digest
+		subject = &d
 	}
 
 	return PutResult{
@@ -138,7 +138,12 @@ func (s *Service) DeleteManifest(ctx context.Context, namespace, reference strin
 	}
 
 	err = s.meta.Atomic(ctx, func(ctx context.Context, tx metastore.TxOps) error {
-		return tx.DeleteManifestByDigest(ctx, namespace, refDigest)
+		deleteErr := tx.DeleteManifestByDigest(ctx, namespace, refDigest)
+		if deleteErr != nil {
+			return deleteErr
+		}
+
+		return tx.DeleteReferrer(ctx, namespace, refDigest)
 	})
 	if err != nil {
 		return fmt.Errorf("DeleteManifest: %w", err)
@@ -169,6 +174,28 @@ func (s *Service) validateContext(ctx context.Context, ns, reference string) (di
 	}
 
 	return d, nil
+}
+
+func (s *Service) storeManifest(
+	ctx context.Context,
+	ns string,
+	mediaType string,
+	d digest.Digest,
+	size int64,
+	ref *metastore.ReferrerRow,
+) error {
+	return s.meta.Atomic(ctx, func(ctx context.Context, tx metastore.TxOps) error {
+		err := tx.InsertManifest(ctx, ns, d, mediaType, size)
+		if err != nil {
+			return err
+		}
+
+		if ref != nil {
+			return tx.UpsertReferrer(ctx, ns, *ref)
+		}
+
+		return nil
+	})
 }
 
 func (s *Service) resolveManifest(

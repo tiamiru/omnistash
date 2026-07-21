@@ -76,11 +76,37 @@ type ManifestOps interface {
 	DeleteManifestByDigest(ctx context.Context, namespace string, d digest.Digest) error
 }
 
+// ReferrerRow is the stored descriptor for one referrer entry.
+type ReferrerRow struct {
+	SubjectDigest digest.Digest
+	Digest        digest.Digest
+	MediaType     string
+	ArtifactType  string
+	Size          int64
+	Annotations   map[string]string
+}
+
+// ReferrerOps manages the referrer index inside a transaction.
+type ReferrerOps interface {
+	// UpsertReferrer records that row.Digest refers to row.SubjectDigest.
+	// This operation is idempotent as the same referrer digest overwrites the prior entry.
+	UpsertReferrer(ctx context.Context, namespace string, row ReferrerRow) error
+
+	// ListReferrers returns all referrer entries pointing to subjectDigest.
+	// Returns an empty slice when none exist.
+	ListReferrers(ctx context.Context, namespace string, subjectDigest digest.Digest) ([]ReferrerRow, error)
+
+	// DeleteReferrer removes the referrer entry for referrerDigest.
+	// No-op when no entry exists.
+	DeleteReferrer(ctx context.Context, namespace string, referrerDigest digest.Digest) error
+}
+
 // TxOps is the full set of operations available inside an Atomic transaction.
 type TxOps interface {
 	NamespaceOps
 	BlobOps
 	ManifestOps
+	ReferrerOps
 }
 
 // MetadataStore is the top-level store handle.
